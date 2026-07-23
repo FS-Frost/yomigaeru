@@ -1,0 +1,15 @@
+{
+	"name": "Yomigaeru — Japonés",
+	"short_name": "Yomigaeru",
+	"description": "Repaso espaciado de japonés con IA, offline-first.",
+	"start_url": ".",
+	"scope": ".",
+	"display": "standalone",
+	"background_color": "#f8fafc",
+	"theme_color": "#0f172a",
+	"lang": "es",
+	"icons": [
+		{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+		{ "src": "icons/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+	]
+}

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+	<head>
+		<meta charset="utf-8" />
+		<title>Yomigaeru</title>
+		<link rel="icon" href="./favicon.svg" />
+		<link rel="apple-touch-icon" href="./favicon.svg" />
+		<link rel="manifest" href="./manifest.webmanifest" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="theme-color" content="#0f172a" />
+		<link href="./_app/immutable/entry/start.BDNCWb1Z.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/BNAgL6Ga.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/Wiw81XNB.js" rel="modulepreload">
+		<link href="./_app/immutable/entry/app.DGthlhB5.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/xihTtKlq.js" rel="modulepreload">
+		<link href="./_app/immutable/nodes/0.DvX_zoGA.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/CL5fgmrh.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/CiorgRuT.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/Dj-2yTVw.js" rel="modulepreload">
+		<link href="./_app/immutable/nodes/6.CpjKy1Al.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/DhVKBege.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/Bfni4Zig.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/VU5JlBRV.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/44cSeIsQ.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/S-mVHlWB.js" rel="modulepreload">
+		<link href="./_app/immutable/chunks/uj3LDF-f.js" rel="modulepreload">
+		
+		<link href="./_app/immutable/assets/0.BYj9mIyO.css" rel="stylesheet">
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">
+			<script>
+				{
+					__sveltekit_1xrxubj = {
+						base: new URL(".", location).pathname.slice(0, -1),
+						assets: "/yomigaeru"
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("./_app/immutable/entry/start.BDNCWb1Z.js"),
+						import("./_app/immutable/entry/app.DGthlhB5.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+
+					if ('serviceWorker' in navigator) {
+						const script_url = './service-worker.js';
+						const policy = globalThis?.window?.trustedTypes?.createPolicy(
+							'sveltekit-trusted-url',
+							{ createScriptURL(url) { return url; } }
+						);
+						const sanitised = policy?.createScriptURL(script_url) ?? script_url;
+						addEventListener('load', function () {
+							navigator.serviceWorker.register(sanitised);
+						});
+					}
+				}
+			</script>
+		</div>
+	</body>
+</html>
