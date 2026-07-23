@@ -1,0 +1,97 @@
+@import 'tailwindcss';
+
+/* Tokens de tema semánticos (paleta actual centralizada) */
+@theme {
+	--color-brand: var(--color-slate-900);
+	--color-accent: var(--color-sky-600);
+	--color-success: var(--color-emerald-600);
+	--color-danger: var(--color-red-600);
+	/* Alto de la bottom tab bar en móvil (sin contar safe-area) */
+	--nav-height: 3.5rem;
+	/* Alto mínimo de controles táctiles (44px objetivo) */
+	--control-h: 2.75rem;
+}
+
+:root {
+	color-scheme: light;
+}
+
+html,
+body {
+	height: 100%;
+}
+
+body {
+	@apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* Padding inferior que respeta el notch/home-indicator iOS */
+@utility pb-safe {
+	padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Reserva de espacio para la bottom bar + safe-area (contenido no tapado) */
+@utility pb-nav {
+	padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 0.5rem);
+}
+
+/* Offset inferior para barras fijas / FAB (encima de la tab bar + safe-area) */
+@utility bottom-nav {
+	bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+}
+
+/* Sin retardo de 300ms ni doble-tap zoom en controles */
+button,
+a,
+label,
+select,
+[role='button'] {
+	touch-action: manipulation;
+}
+
+/* Slider táctil: pista alta y thumb grande y agarrable (usado en Ajustes) */
+input[type='range'] {
+	-webkit-appearance: none;
+	appearance: none;
+	height: 1.75rem;
+	background: transparent;
+	cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+	height: 0.5rem;
+	border-radius: 9999px;
+	background: var(--color-slate-200);
+}
+input[type='range']::-moz-range-track {
+	height: 0.5rem;
+	border-radius: 9999px;
+	background: var(--color-slate-200);
+}
+input[type='range']::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	margin-top: -0.625rem;
+	height: 1.75rem;
+	width: 1.75rem;
+	border-radius: 9999px;
+	background: var(--color-accent);
+	border: 3px solid #fff;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+input[type='range']::-moz-range-thumb {
+	height: 1.75rem;
+	width: 1.75rem;
+	border-radius: 9999px;
+	background: var(--color-accent);
+	border: 3px solid #fff;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+input[type='range']:focus-visible::-webkit-slider-thumb {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+/* Furigana: da aire vertical a las lecturas <ruby>/<rt> */
+ruby rt {
+	@apply text-[0.6em] text-slate-500;
+}
