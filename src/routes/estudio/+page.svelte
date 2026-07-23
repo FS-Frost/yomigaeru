@@ -69,7 +69,12 @@
 	async function saveGrammar() {
 		if (!current || !grammar || current.card.id == null) return;
 		const savedAt = Date.now();
-		await updateCard(current.card.id, { grammar, grammarSavedAt: savedAt });
+		try {
+			await updateCard(current.card.id, { grammar, grammarSavedAt: savedAt });
+		} catch {
+			app.toast('No se pudo guardar la explicación', 'error');
+			return;
+		}
 		current.card.grammar = grammar;
 		current.card.grammarSavedAt = savedAt;
 		grammarSaved = true;
@@ -77,10 +82,15 @@
 	}
 
 	onMount(async () => {
-		retention = await getSetting('requestRetention');
-		queue = await getDueCards();
-		loading = false;
-		if (queue.length) autoSpeak();
+		try {
+			retention = await getSetting('requestRetention');
+			queue = await getDueCards();
+			if (queue.length) autoSpeak();
+		} catch {
+			app.toast('No se pudieron cargar las tarjetas', 'error');
+		} finally {
+			loading = false;
+		}
 	});
 
 	function autoSpeak() {
@@ -98,10 +108,15 @@
 		if (!current) return;
 		const now = Date.now();
 		const { next, log } = applyRating(current.fsrs, RATINGS[key], now, retention);
-		await db.transaction('rw', db.fsrsData, db.reviewLogs, async () => {
-			await db.fsrsData.put(next);
-			await db.reviewLogs.add(log);
-		});
+		try {
+			await db.transaction('rw', db.fsrsData, db.reviewLogs, async () => {
+				await db.fsrsData.put(next);
+				await db.reviewLogs.add(log);
+			});
+		} catch {
+			app.toast('No se pudo guardar el repaso. Revisa el almacenamiento del navegador.', 'error');
+			return;
+		}
 		reviewed++;
 		revealed = false;
 		grammar = null;

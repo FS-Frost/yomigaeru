@@ -19,6 +19,14 @@
 		if (file) pendingImport = file;
 	}
 
+	async function runExport() {
+		try {
+			await downloadBackup();
+		} catch {
+			app.toast('No se pudo exportar el backup', 'error');
+		}
+	}
+
 	async function runImport() {
 		if (!pendingImport) return;
 		const file = pendingImport;
@@ -35,14 +43,23 @@
 	let voices = $state<SpeechSynthesisVoice[]>([]);
 
 	onMount(async () => {
-		settings = await getAllSettings();
-		if (ttsSupported()) voices = await listJapaneseVoices();
+		try {
+			settings = await getAllSettings();
+			if (ttsSupported()) voices = await listJapaneseVoices();
+		} catch {
+			app.toast('No se pudieron cargar los ajustes', 'error');
+		}
 	});
 
 	async function save<K extends keyof SettingsMap>(key: K, value: SettingsMap[K]) {
-		await setSetting(key, value);
-		if (settings) settings[key] = value;
-		await app.loadSettings();
+		try {
+			await setSetting(key, value);
+			if (settings) settings[key] = value;
+			await app.loadSettings();
+		} catch {
+			app.toast('No se pudo guardar el ajuste', 'error');
+			return;
+		}
 		app.toast('Guardado', 'success');
 	}
 </script>
@@ -124,7 +141,7 @@
 			<h2 class="mb-1 font-semibold">Backup</h2>
 			<p class="mb-3 text-sm text-slate-500">Exporta o restaura todos tus mazos, tarjetas y progreso en un archivo JSON.</p>
 			<div class="flex gap-2">
-				<Button onclick={() => downloadBackup()}>Exportar</Button>
+				<Button onclick={runExport}>Exportar</Button>
 				<label class="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium transition select-none hover:bg-slate-50 active:scale-[.98]">
 					Importar
 					<input type="file" accept="application/json,.json" class="hidden" onchange={onImportPicked} />

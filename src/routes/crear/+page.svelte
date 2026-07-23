@@ -21,8 +21,12 @@
 	let deckId = $state<number | null>(null);
 
 	onMount(async () => {
-		decks = await listDecks();
-		deckId = decks[0]?.id ?? null;
+		try {
+			decks = await listDecks();
+			deckId = decks[0]?.id ?? null;
+		} catch {
+			app.toast('No se pudieron cargar los mazos', 'error');
+		}
 	});
 
 	async function generate() {
@@ -48,15 +52,20 @@
 
 	async function save() {
 		if (!draft) return;
-		const targetDeck = await ensureDeck();
-		const contextParts = [draft.context, ...draft.examples.map((e) => `${e.jp} — ${e.es}`)].filter(Boolean);
-		await createCard({
-			deckId: targetDeck,
-			front: draft.front,
-			back: draft.back,
-			reading: draft.reading || undefined,
-			context: contextParts.join('\n') || undefined,
-		});
+		try {
+			const targetDeck = await ensureDeck();
+			const contextParts = [draft.context, ...draft.examples.map((e) => `${e.jp} — ${e.es}`)].filter(Boolean);
+			await createCard({
+				deckId: targetDeck,
+				front: draft.front,
+				back: draft.back,
+				reading: draft.reading || undefined,
+				context: contextParts.join('\n') || undefined,
+			});
+		} catch {
+			app.toast('No se pudo guardar la tarjeta', 'error');
+			return;
+		}
 		app.toast('Tarjeta guardada', 'success');
 		draft = null;
 		input = '';

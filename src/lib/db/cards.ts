@@ -14,10 +14,6 @@ export async function listCards(deckId: number): Promise<Card[]> {
 	return db.cards.where('deckId').equals(deckId).reverse().sortBy('createdAt');
 }
 
-export async function getCard(id: number): Promise<Card | undefined> {
-	return db.cards.get(id);
-}
-
 /** Crea la tarjeta y su estado FSRS inicial (New) en una transacción. */
 export async function createCard(card: NewCard): Promise<number> {
 	return db.transaction('rw', db.cards, db.fsrsData, async () => {
@@ -44,14 +40,6 @@ export async function createCards(cards: NewCard[]): Promise<number[]> {
 
 export async function updateCard(id: number, changes: Partial<Omit<Card, 'id'>>): Promise<void> {
 	await db.cards.update(id, changes);
-}
-
-export async function deleteCard(id: number): Promise<void> {
-	await db.transaction('rw', db.cards, db.fsrsData, db.reviewLogs, async () => {
-		await db.fsrsData.delete(id);
-		await db.reviewLogs.where('cardId').equals(id).delete();
-		await db.cards.delete(id);
-	});
 }
 
 /** Borra una tarjeta devolviendo una copia completa (tarjeta + FSRS + logs) para deshacer. */

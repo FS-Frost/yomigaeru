@@ -42,27 +42,6 @@ export const cardsGeminiSchema: Schema = {
 	required: ['cards'],
 };
 
-// --- Juez de producción ---
-
-export const Judgement = z.object({
-	correct: z.boolean(),
-	score: z.number(), // 0..100
-	feedback: z.string(),
-	correctedAnswer: z.string().default(''),
-});
-export type Judgement = z.infer<typeof Judgement>;
-
-export const judgementGeminiSchema: Schema = {
-	type: Type.OBJECT,
-	properties: {
-		correct: { type: Type.BOOLEAN },
-		score: { type: Type.NUMBER, description: '0 a 100' },
-		feedback: { type: Type.STRING, description: 'Explicación en español' },
-		correctedAnswer: { type: Type.STRING, description: 'Versión corregida en japonés' },
-	},
-	required: ['correct', 'score', 'feedback'],
-};
-
 // --- Desglose gramatical ---
 
 export const GrammarBreakdown = z.object({

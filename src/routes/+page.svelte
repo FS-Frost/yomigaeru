@@ -4,15 +4,21 @@
 	import { listDecks } from '$lib/db/decks';
 	import { countDue } from '$lib/srs/queue';
 	import type { Deck } from '$lib/db/schema';
+	import { app } from '$lib/state/app.svelte';
 
 	let decks = $state<Deck[]>([]);
 	let due = $state(0);
 	let loading = $state(true);
 
 	onMount(async () => {
-		decks = await listDecks();
-		due = await countDue();
-		loading = false;
+		try {
+			decks = await listDecks();
+			due = await countDue();
+		} catch {
+			app.toast('No se pudieron cargar los datos', 'error');
+		} finally {
+			loading = false;
+		}
 	});
 </script>
 

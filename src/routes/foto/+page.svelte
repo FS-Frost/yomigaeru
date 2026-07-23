@@ -26,8 +26,12 @@
 
 	onMount(async () => {
 		canLiveCamera = !!navigator.mediaDevices?.getUserMedia;
-		decks = await listDecks();
-		deckId = decks[0]?.id ?? null;
+		try {
+			decks = await listDecks();
+			deckId = decks[0]?.id ?? null;
+		} catch {
+			app.toast('No se pudieron cargar los mazos', 'error');
+		}
 	});
 
 	async function handleFile(file: Blob | null | undefined) {
@@ -116,16 +120,24 @@
 	async function save() {
 		const chosen = cards.filter((c) => c.keep);
 		if (!chosen.length) return;
-		const target = await ensureDeck();
-		const payload: NewCard[] = chosen.map((c) => ({
-			deckId: target,
-			front: c.front,
-			back: c.back,
-			reading: c.reading || undefined,
-			context: [c.context, ...c.examples.map((e) => `${e.jp} — ${e.es}`)].filter(Boolean).join('\n') || undefined,
-			imageBlob: attachImage && img ? img.blob : undefined,
-		}));
-		await createCards(payload);
+		const payload: NewCard[] = [];
+		try {
+			const target = await ensureDeck();
+			for (const c of chosen) {
+				payload.push({
+					deckId: target,
+					front: c.front,
+					back: c.back,
+					reading: c.reading || undefined,
+					context: [c.context, ...c.examples.map((e) => `${e.jp} — ${e.es}`)].filter(Boolean).join('\n') || undefined,
+					imageBlob: attachImage && img ? img.blob : undefined,
+				});
+			}
+			await createCards(payload);
+		} catch {
+			app.toast('No se pudieron guardar las tarjetas', 'error');
+			return;
+		}
 		app.toast(`${payload.length} tarjetas guardadas`, 'success');
 		cards = [];
 		img = null;

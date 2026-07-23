@@ -1,4 +1,4 @@
-import { generateJson, type InlineImage } from './client';
+import { generateJson, GeminiError, type InlineImage } from './client';
 import { GeneratedCards, cardsGeminiSchema, type GeneratedCard } from './schemas';
 
 export interface RefineOptions {
@@ -34,5 +34,9 @@ Ajústalas según la instrucción del usuario en vez de empezar de cero: conserv
 Responde solo con el JSON.`;
 
 	const raw = await generateJson({ prompt, schema: cardsGeminiSchema, image, useSearch: true });
-	return GeneratedCards.parse(JSON.parse(raw)).cards;
+	try {
+		return GeneratedCards.parse(JSON.parse(raw)).cards;
+	} catch {
+		throw new GeminiError('La IA devolvió una respuesta con un formato inesperado. Inténtalo de nuevo.');
+	}
 }

@@ -4,10 +4,6 @@ export async function listDecks(): Promise<Deck[]> {
 	return db.decks.orderBy('createdAt').reverse().toArray();
 }
 
-export async function getDeck(id: number): Promise<Deck | undefined> {
-	return db.decks.get(id);
-}
-
 export async function createDeck(name: string, description = ''): Promise<number> {
 	return db.decks.add({ name, description, createdAt: Date.now() }) as Promise<number>;
 }

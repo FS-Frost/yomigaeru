@@ -8,8 +8,8 @@
 	let { children } = $props();
 
 	onMount(() => {
-		app.loadSettings();
-		requestPersistentStorage();
+		app.loadSettings().catch(() => app.toast('No se pudieron cargar los ajustes', 'error'));
+		requestPersistentStorage().catch(() => {});
 		registerServiceWorker();
 	});
 </script>

@@ -43,16 +43,26 @@
 
 	async function openCards(id: number) {
 		openDeck = openDeck === id ? null : id;
-		if (openDeck !== null) cards = await listCards(id);
+		if (openDeck === null) return;
+		try {
+			cards = await listCards(id);
+		} catch {
+			app.toast('No se pudieron cargar las tarjetas', 'error');
+		}
 	}
 
 	async function addDeck() {
 		const name = newDeckName.trim();
 		if (!name) return;
-		await createDeck(name, newDeckDesc.trim());
-		newDeckName = '';
-		newDeckDesc = '';
-		await reloadDecks();
+		try {
+			await createDeck(name, newDeckDesc.trim());
+			newDeckName = '';
+			newDeckDesc = '';
+			await reloadDecks();
+		} catch {
+			app.toast('No se pudo crear el mazo', 'error');
+			return;
+		}
 		app.toast('Mazo creado', 'success');
 	}
 
@@ -63,35 +73,50 @@
 
 	async function saveDeck() {
 		if (editingDeckId === null || !deckForm.name.trim()) return;
-		await updateDeck(editingDeckId, {
-			name: deckForm.name.trim(),
-			description: deckForm.description.trim() || undefined,
-		});
-		editingDeckId = null;
-		await reloadDecks();
+		try {
+			await updateDeck(editingDeckId, {
+				name: deckForm.name.trim(),
+				description: deckForm.description.trim() || undefined,
+			});
+			editingDeckId = null;
+			await reloadDecks();
+		} catch {
+			app.toast('No se pudo actualizar el mazo', 'error');
+			return;
+		}
 		app.toast('Mazo actualizado', 'success');
 	}
 
 	async function removeDeck(id: number) {
-		await deleteDeck(id);
-		if (openDeck === id) openDeck = null;
-		if (editingDeckId === id) editingDeckId = null;
-		await reloadDecks();
+		try {
+			await deleteDeck(id);
+			if (openDeck === id) openDeck = null;
+			if (editingDeckId === id) editingDeckId = null;
+			await reloadDecks();
+		} catch {
+			app.toast('No se pudo borrar el mazo', 'error');
+			return;
+		}
 		app.toast('Mazo borrado', 'success');
 	}
 
 	async function addCard() {
 		if (openDeck === null || !form.front.trim() || !form.back.trim()) return;
-		await createCard({
-			deckId: openDeck,
-			front: form.front.trim(),
-			back: form.back.trim(),
-			reading: form.reading.trim() || undefined,
-			context: form.context.trim() || undefined,
-		});
-		form = { front: '', back: '', reading: '', context: '' };
-		cards = await listCards(openDeck);
-		await reloadDecks();
+		try {
+			await createCard({
+				deckId: openDeck,
+				front: form.front.trim(),
+				back: form.back.trim(),
+				reading: form.reading.trim() || undefined,
+				context: form.context.trim() || undefined,
+			});
+			form = { front: '', back: '', reading: '', context: '' };
+			cards = await listCards(openDeck);
+			await reloadDecks();
+		} catch {
+			app.toast('No se pudo añadir la tarjeta', 'error');
+			return;
+		}
 		app.toast('Tarjeta añadida', 'success');
 	}
 
@@ -107,37 +132,58 @@
 
 	async function saveCard() {
 		if (editingCardId === null || !cardForm.front.trim() || !cardForm.back.trim()) return;
-		await updateCard(editingCardId, {
-			front: cardForm.front.trim(),
-			back: cardForm.back.trim(),
-			reading: cardForm.reading.trim() || undefined,
-			context: cardForm.context.trim() || undefined,
-		});
-		editingCardId = null;
-		if (openDeck !== null) cards = await listCards(openDeck);
+		try {
+			await updateCard(editingCardId, {
+				front: cardForm.front.trim(),
+				back: cardForm.back.trim(),
+				reading: cardForm.reading.trim() || undefined,
+				context: cardForm.context.trim() || undefined,
+			});
+			editingCardId = null;
+			if (openDeck !== null) cards = await listCards(openDeck);
+		} catch {
+			app.toast('No se pudo actualizar la tarjeta', 'error');
+			return;
+		}
 		app.toast('Tarjeta actualizada', 'success');
 	}
 
 	// Borra con opción de deshacer (restaura tarjeta + progreso FSRS).
 	async function removeCard(id: number) {
-		const snap = await deleteCardWithSnapshot(id);
-		if (editingCardId === id) editingCardId = null;
-		if (openDeck !== null) cards = await listCards(openDeck);
-		await reloadDecks();
+		let snap;
+		try {
+			snap = await deleteCardWithSnapshot(id);
+			if (editingCardId === id) editingCardId = null;
+			if (openDeck !== null) cards = await listCards(openDeck);
+			await reloadDecks();
+		} catch {
+			app.toast('No se pudo borrar la tarjeta', 'error');
+			return;
+		}
 		if (!snap) return;
 		app.toast('Tarjeta borrada', 'info', {
 			action: {
 				label: 'Deshacer',
 				run: async () => {
-					await restoreCard(snap);
-					if (openDeck !== null) cards = await listCards(openDeck);
-					await reloadDecks();
+					try {
+						await restoreCard(snap);
+						if (openDeck !== null) cards = await listCards(openDeck);
+						await reloadDecks();
+					} catch {
+						app.toast('No se pudo restaurar la tarjeta', 'error');
+					}
 				},
 			},
 		});
 	}
 
-	onMount(reloadDecks);
+	onMount(async () => {
+		try {
+			await reloadDecks();
+		} catch {
+			app.toast('No se pudieron cargar los mazos', 'error');
+		}
+	});
 </script>
 
 <h1 class="mb-4 text-2xl font-bold">Mazos</h1>
