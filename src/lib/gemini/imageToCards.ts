@@ -30,8 +30,9 @@ Ajústalas según la instrucción del usuario en vez de empezar de cero: conserv
 		prompt += `\n\nInstrucción del usuario: "${opts.instruction.trim()}"`;
 	}
 
-	prompt += `\nResponde solo con el JSON.`;
+	prompt += `\nSi alguna palabra es poco común, un nombre propio, jerga o un término reciente, verifica su lectura y uso con una búsqueda web antes de responder.
+Responde solo con el JSON.`;
 
-	const raw = await generateJson({ prompt, schema: cardsGeminiSchema, image });
+	const raw = await generateJson({ prompt, schema: cardsGeminiSchema, image, useSearch: true });
 	return GeneratedCards.parse(JSON.parse(raw)).cards;
 }

@@ -28,8 +28,9 @@ Oración: "${clean}"${focusBlock}
 - "summary": traducción y sentido general en español.
 - "focusNote": explicación enfocada en la palabra que se está aprendiendo (deja vacío si no se indicó ninguna).
 - "tokens": divide la oración en fragmentos (partículas, verbos, sustantivos, etc.). Para cada uno: "surface" (el fragmento japonés), "role" (su función), "note" (explicación/matiz en español).
+Si aparece una palabra poco común, un nombre propio, jerga o un término reciente, verifica su lectura y uso con una búsqueda web antes de responder.
 Responde solo con el JSON.`;
 
-	const raw = await generateJson({ prompt, schema: grammarGeminiSchema });
+	const raw = await generateJson({ prompt, schema: grammarGeminiSchema, useSearch: true });
 	return GrammarBreakdown.parse(JSON.parse(raw));
 }

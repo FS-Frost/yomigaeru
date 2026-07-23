@@ -19,7 +19,7 @@ async function getClient(): Promise<GoogleGenAI> {
  * Llama a Gemini forzando salida JSON validada por `responseSchema` y devuelve
  * el texto JSON crudo. Los llamadores lo validan con Zod.
  */
-export async function generateJson(opts: { prompt: string; schema: Schema; image?: InlineImage }): Promise<string> {
+export async function generateJson(opts: { prompt: string; schema: Schema; image?: InlineImage; useSearch?: boolean }): Promise<string> {
 	const genAI = await getClient();
 	const model = await getSetting('geminiModel');
 
@@ -28,11 +28,18 @@ export async function generateJson(opts: { prompt: string; schema: Schema; image
 		parts.push({ inlineData: { mimeType: opts.image.mimeType, data: opts.image.base64 } });
 	}
 
+	const config: Record<string, unknown> = { responseMimeType: 'application/json', responseSchema: opts.schema };
+	// La búsqueda web (grounding) solo es compatible con salida JSON en la serie Gemini 3.
+	// Con modelos anteriores se omite para evitar el error 400 (degradación silenciosa).
+	if (opts.useSearch && model.startsWith('gemini-3')) {
+		config.tools = [{ googleSearch: {} }];
+	}
+
 	try {
 		const res = await genAI.models.generateContent({
 			model,
 			contents: [{ role: 'user', parts }],
-			config: { responseMimeType: 'application/json', responseSchema: opts.schema },
+			config,
 		});
 		const text = res.text;
 		if (!text) throw new GeminiError('Respuesta vacía de Gemini.');

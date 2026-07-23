@@ -72,6 +72,7 @@
 					value={settings.geminiModel}
 					onchange={(e) => save('geminiModel', (e.currentTarget as HTMLInputElement).value)}
 				/>
+				<p class="mt-1 text-xs text-slate-500">La búsqueda web al generar tarjetas requiere un modelo de la serie Gemini 3 (ej: gemini-3-flash-preview).</p>
 			</div>
 		</section>
 

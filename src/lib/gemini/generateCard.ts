@@ -12,8 +12,9 @@ Reglas:
 - "back": significado claro y conciso en español.
 - "context": una breve nota de uso o gramática en español.
 - "examples": 1 a 2 oraciones de ejemplo (jp con furigana, es traducción).
+Si la palabra es poco común, un nombre propio, jerga o un término reciente, verifica su lectura y uso con una búsqueda web antes de responder.
 Responde solo con el JSON.`;
 
-	const raw = await generateJson({ prompt, schema: cardGeminiSchema });
+	const raw = await generateJson({ prompt, schema: cardGeminiSchema, useSearch: true });
 	return GeneratedCard.parse(JSON.parse(raw));
 }
