@@ -91,7 +91,7 @@
 						class="flex-1"
 					>
 						<option value="">(Predeterminada del sistema)</option>
-						{#each voices as v}
+						{#each voices as v (v.voiceURI)}
 							<option value={v.voiceURI}>{v.name} — {v.lang}</option>
 						{/each}
 					</Select>

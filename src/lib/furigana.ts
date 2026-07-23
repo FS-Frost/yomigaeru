@@ -9,7 +9,7 @@ export interface FuriganaSegment {
 	rt?: string;
 }
 
-const TOKEN = /([^\s\[\]]+)\[([^\]]+)\]/g;
+const TOKEN = /([^\s[\]]+)\[([^\]]+)\]/g;
 
 export function parseFurigana(text: string): FuriganaSegment[] {
 	const segments: FuriganaSegment[] = [];

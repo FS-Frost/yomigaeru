@@ -24,7 +24,7 @@
 <!-- Escritorio: barra superior sticky -->
 <nav class="sticky top-0 z-10 hidden border-b border-slate-200 bg-white/90 backdrop-blur sm:block">
 	<div class="mx-auto flex max-w-3xl items-center gap-1 px-3 py-2">
-		{#each links as link}
+		{#each links as link (link.href)}
 			<a
 				href={url(link.href)}
 				class="rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition {isActive(link.href)
@@ -42,7 +42,7 @@
 	class="pb-safe fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white/95 backdrop-blur sm:hidden"
 >
 	<div class="mx-auto grid max-w-3xl grid-cols-6">
-		{#each links as link}
+		{#each links as link (link.href)}
 			<a
 				href={url(link.href)}
 				aria-current={isActive(link.href) ? 'page' : undefined}

@@ -66,7 +66,7 @@ export interface ReviewLog {
 
 export interface Setting {
 	key: string;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	 
 	value: unknown;
 }
 

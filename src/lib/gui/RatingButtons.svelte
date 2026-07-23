@@ -19,7 +19,7 @@
 </script>
 
 <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-	{#each buttons as b}
+	{#each buttons as b (b.key)}
 		<button
 			class="flex min-h-14 flex-col items-center justify-center rounded-lg px-2 py-4 font-medium text-white transition select-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[.97] sm:py-3 {b.class}"
 			onclick={() => onrate(b.key)}

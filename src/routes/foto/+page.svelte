@@ -12,6 +12,7 @@
 	import Button from '$lib/gui/Button.svelte';
 	import Field from '$lib/gui/Field.svelte';
 	import Select from '$lib/gui/Select.svelte';
+	import CameraCapture from '$lib/gui/CameraCapture.svelte';
 
 	let img = $state<CompressedImage | null>(null);
 	let loading = $state(false);
@@ -20,16 +21,29 @@
 	let deckId = $state<number | null>(null);
 	let attachImage = $state(true);
 	let refineInstruction = $state('');
+	let cameraOpen = $state(false);
+	let canLiveCamera = $state(true);
 
 	onMount(async () => {
+		canLiveCamera = !!navigator.mediaDevices?.getUserMedia;
 		decks = await listDecks();
 		deckId = decks[0]?.id ?? null;
 	});
 
 	async function handleFile(file: Blob | null | undefined) {
 		if (!file) return;
-		img = await compressImage(file);
-		cards = [];
+		try {
+			img = await compressImage(file);
+			cards = [];
+		} catch {
+			app.toast('No se pudo procesar la imagen. Prueba con otro formato.', 'error');
+		}
+	}
+
+	// La cámara devuelve un blob: comprimimos y disparamos la extracción con IA automáticamente.
+	async function onCameraCapture(blob: Blob) {
+		await handleFile(blob);
+		if (img) await extract();
 	}
 
 	function onPaste(e: ClipboardEvent) {
@@ -76,7 +90,7 @@
 		loading = true;
 		try {
 			// Enviamos las tarjetas actuales (sin `keep`) para que la IA las ajuste.
-			const previous = cards.map(({ keep: _keep, ...c }) => c);
+			const previous = cards.map(({ keep, ...c }) => c);
 			const result = await imageToCards(
 				{ mimeType: img.mimeType, base64: img.base64 },
 				{ instruction: refineInstruction, previous },
@@ -128,12 +142,18 @@
 		Elegir archivo
 		<input type="file" accept="image/*" class="hidden" onchange={(e) => handleFile((e.currentTarget as HTMLInputElement).files?.[0])} />
 	</label>
-	<label class="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium transition select-none hover:bg-slate-50 active:scale-[.98]">
-		📷 Cámara
-		<input type="file" accept="image/*" capture="environment" class="hidden" onchange={(e) => handleFile((e.currentTarget as HTMLInputElement).files?.[0])} />
-	</label>
+	{#if canLiveCamera}
+		<Button variant="secondary" onclick={() => (cameraOpen = true)}>📷 Cámara</Button>
+	{:else}
+		<label class="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium transition select-none hover:bg-slate-50 active:scale-[.98]">
+			📷 Cámara
+			<input type="file" accept="image/*" capture="environment" class="hidden" onchange={(e) => handleFile((e.currentTarget as HTMLInputElement).files?.[0])} />
+		</label>
+	{/if}
 	<Button variant="secondary" onclick={pasteFromClipboard}>Pegar del portapapeles</Button>
 </div>
+
+<CameraCapture bind:open={cameraOpen} oncapture={onCameraCapture} />
 
 {#if img}
 	<div class="mt-4">
@@ -146,7 +166,7 @@
 
 {#if cards.length}
 	<div class="mt-6 space-y-3">
-		{#each cards as card}
+		{#each cards as card, i (i)}
 			<label class="block rounded-lg border bg-white p-3 transition {card.keep ? 'border-sky-400 ring-1 ring-sky-200' : 'border-slate-200'}">
 				<div class="flex items-start gap-3">
 					<input type="checkbox" bind:checked={card.keep} class="mt-1 size-5 shrink-0 accent-sky-600" />
@@ -187,7 +207,7 @@
 		<div class="pointer-events-auto mx-auto flex max-w-3xl items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
 			<Select bind:value={deckId} class="flex-1">
 				<option value={null}>+ Nuevo mazo "Desde imágenes"</option>
-				{#each decks as d}
+				{#each decks as d (d.id)}
 					<option value={d.id}>{d.name}</option>
 				{/each}
 			</Select>

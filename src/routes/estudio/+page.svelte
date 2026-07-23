@@ -177,7 +177,7 @@
 								<p class="mb-2 rounded bg-sky-50 p-2 text-slate-700">{grammar.focusNote}</p>
 							{/if}
 							<ul class="space-y-1">
-								{#each grammar.tokens as tok}
+								{#each grammar.tokens as tok, i (i)}
 									<li>
 										<span class="font-semibold">{tok.surface}</span>
 										<span class="text-slate-400">({tok.role})</span> — {tok.note}

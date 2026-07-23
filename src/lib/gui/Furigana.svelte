@@ -11,7 +11,7 @@
 </script>
 
 <span class={className}>
-	{#each segments as seg}
+	{#each segments as seg, i (i)}
 		{#if seg.rt && showReadings}
 			<ruby>{seg.base}<rt>{seg.rt}</rt></ruby>
 		{:else}

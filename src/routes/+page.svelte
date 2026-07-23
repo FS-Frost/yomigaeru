@@ -17,7 +17,17 @@
 </script>
 
 <h1 class="mb-1 text-2xl font-bold">蘇る Yomigaeru</h1>
-<p class="mb-6 text-slate-500">Repaso espaciado de japonés con IA.</p>
+<p class="mb-2 text-slate-500">Repaso espaciado de japonés con IA.</p>
+<p class="mb-6">
+	<a
+		href="https://github.com/FS-Frost/yomigaeru"
+		target="_blank"
+		rel="noopener noreferrer"
+		class="text-sm font-medium text-slate-600 underline hover:text-slate-900"
+	>
+		Ver en GitHub
+	</a>
+</p>
 
 {#if loading}
 	<p class="text-slate-400">Cargando…</p>

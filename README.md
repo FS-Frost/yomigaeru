@@ -11,26 +11,26 @@ PWA estática tipo Anki para aprender japonés, con SRS (repetición espaciada) 
 - **TTS** en japonés (`ja-JP`) vía Web Speech API; voz configurable.
 - **Mazos y tarjetas**: CRUD completo, imagen de contexto opcional.
 - **IA (Gemini)**:
-  - Generar tarjeta desde texto.
-  - Foto/captura → tarjetas (multimodal, con compresión de imagen en cliente).
-  - Juez de producción: escribes tu respuesta y la IA la evalúa.
-  - Desglose gramatical de la oración (cacheado por tarjeta).
+    - Generar tarjeta desde texto.
+    - Foto/captura → tarjetas (multimodal, con compresión de imagen en cliente).
+    - Juez de producción: escribes tu respuesta y la IA la evalúa.
+    - Desglose gramatical de la oración (cacheado por tarjeta).
 - **Backup**: exportar / importar toda la base de datos (JSON, vía `dexie-export-import`).
 - **PWA**: service worker offline-first, almacenamiento persistente (`navigator.storage.persist()`), instalable.
 
 ## Stack
 
-| Área | Tecnología |
-|------|-----------|
-| Framework | SvelteKit + Svelte 5 (runes) |
-| Build | Vite 8 |
-| Estilos | Tailwind CSS 4 |
-| DB local | IndexedDB vía [Dexie.js](https://dexie.org) |
-| SRS | ts-fsrs |
-| IA | `@google/genai` (Gemini) |
-| Validación | Zod |
-| Runtime/PM | [Bun](https://bun.sh) |
-| Adapter | `adapter-static` → GitHub Pages |
+| Área       | Tecnología                                  |
+| ---------- | ------------------------------------------- |
+| Framework  | SvelteKit + Svelte 5 (runes)                |
+| Build      | Vite 8                                      |
+| Estilos    | Tailwind CSS 4                              |
+| DB local   | IndexedDB vía [Dexie.js](https://dexie.org) |
+| SRS        | ts-fsrs                                     |
+| IA         | `@google/genai` (Gemini)                    |
+| Validación | Zod                                         |
+| Runtime/PM | [Bun](https://bun.sh)                       |
+| Adapter    | `adapter-static` → GitHub Pages             |
 
 ## Requisitos
 
@@ -44,14 +44,14 @@ bun install
 bun run dev        # servidor local (PORT=5000 por defecto)
 ```
 
-| Comando | Qué hace |
-|---------|----------|
-| `bun run dev` | Servidor de desarrollo |
-| `bun run build` | Build de producción a `build/` |
-| `bun run preview` | Previsualiza el build |
-| `bun run check` | `svelte-kit sync` + `svelte-check` (typecheck) |
-| `bun run format` | Prettier escribe |
-| `bun run lint` | Prettier verifica |
+| Comando           | Qué hace                                       |
+| ----------------- | ---------------------------------------------- |
+| `bun run dev`     | Servidor de desarrollo                         |
+| `bun run build`   | Build de producción a `build/`                 |
+| `bun run preview` | Previsualiza el build                          |
+| `bun run check`   | `svelte-kit sync` + `svelte-check` (typecheck) |
+| `bun run format`  | Prettier escribe                               |
+| `bun run lint`    | Prettier verifica                              |
 
 > El service worker **solo** se construye en `build` (no en dev).
 

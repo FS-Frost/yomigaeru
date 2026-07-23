@@ -85,7 +85,7 @@
 
 		{#if draft.examples.length}
 			<ul class="mt-3 space-y-1 text-sm text-slate-600">
-				{#each draft.examples as ex}
+				{#each draft.examples as ex, i (i)}
 					<li><Furigana text={ex.jp} /> — {ex.es}</li>
 				{/each}
 			</ul>
@@ -99,7 +99,7 @@
 		<div class="pointer-events-auto mx-auto flex max-w-3xl items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
 			<Select bind:value={deckId} class="flex-1">
 				<option value={null}>+ Nuevo mazo "Generadas por IA"</option>
-				{#each decks as d}
+				{#each decks as d (d.id)}
 					<option value={d.id}>{d.name}</option>
 				{/each}
 			</Select>
