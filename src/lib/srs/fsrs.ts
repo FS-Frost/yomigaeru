@@ -1,7 +1,8 @@
-import { createEmptyCard, fsrs, generatorParameters, Rating, State, type Card as FsrsCard, type Grade } from 'ts-fsrs';
-import type { FsrsData, FsrsState, ReviewLog } from '$lib/db/schema';
+import { createEmptyCard, fsrs, generatorParameters, Rating, State, type Card as FsrsCard, type Grade, type FSRS } from 'ts-fsrs';
+import type { AnswerVia, Facet, FsrsState, ReviewLog, Schedule } from '$lib/db/schema';
 
 export { Rating, State };
+export type { Grade };
 
 /** Botones de la UI mapeados a los grados de ts-fsrs. */
 export const RATINGS = {
@@ -13,14 +14,34 @@ export const RATINGS = {
 
 export type RatingKey = keyof typeof RATINGS;
 
-function makeScheduler(requestRetention = 0.9) {
-	return fsrs(generatorParameters({ request_retention: requestRetention, enable_fuzz: true }));
+/** Configuración del programador: retención objetivo y parámetros calibrados opcionales. */
+export interface SchedulerConfig {
+	requestRetention: number;
+	params?: number[] | null;
 }
 
-/** ts-fsrs Card (con Date) -> FsrsData persistible (con epoch ms). */
-function fromFsrsCard(cardId: number, card: FsrsCard): FsrsData {
+const cache = new Map<string, FSRS>();
+
+/** Programador memoizado por configuración. */
+export function schedulerFor(cfg: SchedulerConfig, fuzz = true): FSRS {
+	const key = JSON.stringify([cfg.requestRetention, cfg.params ?? null, fuzz]);
+	let s = cache.get(key);
+	if (!s) {
+		s = fsrs(
+			generatorParameters({
+				request_retention: cfg.requestRetention,
+				enable_fuzz: fuzz,
+				...(cfg.params?.length ? { w: cfg.params } : {}),
+			}),
+		);
+		cache.set(key, s);
+	}
+	return s;
+}
+
+/** ts-fsrs Card (con Date) → campos persistibles (epoch ms). */
+export function fromFsrsCard(card: FsrsCard): Omit<Schedule, 'id' | 'cardId' | 'facet'> {
 	return {
-		cardId,
 		due: card.due.getTime(),
 		stability: card.stability,
 		difficulty: card.difficulty,
@@ -34,12 +55,15 @@ function fromFsrsCard(cardId: number, card: FsrsCard): FsrsData {
 	};
 }
 
-/** FsrsData persistido -> ts-fsrs Card (con Date). */
-function toFsrsCard(data: FsrsData): FsrsCard {
+/** Schedule persistido → ts-fsrs Card (con Date). */
+export function toFsrsCard(data: Omit<Schedule, 'id' | 'cardId' | 'facet'>): FsrsCard {
+	// Datos importados o corruptos (dificultad/estabilidad fuera de rango en una cara ya vista)
+	// harían lanzar a ts-fsrs y romperían la sesión: se acotan a valores válidos.
+	const seen = data.state !== 0;
 	return {
 		due: new Date(data.due),
-		stability: data.stability,
-		difficulty: data.difficulty,
+		stability: seen ? Math.max(0.01, data.stability || 0.01) : data.stability,
+		difficulty: seen ? Math.min(10, Math.max(1, data.difficulty || 5)) : data.difficulty,
 		elapsed_days: data.elapsed_days,
 		scheduled_days: data.scheduled_days,
 		learning_steps: data.learning_steps,
@@ -50,22 +74,20 @@ function toFsrsCard(data: FsrsData): FsrsCard {
 	};
 }
 
-/** Estado FSRS inicial para una tarjeta recién creada. */
-export function newFsrsData(cardId: number, now: number = Date.now()): FsrsData {
-	return fromFsrsCard(cardId, createEmptyCard(new Date(now)));
+/** Programación inicial (New) de una cara. */
+export function newSchedule(cardId: number, facet: Facet, now: number = Date.now()): Schedule {
+	return { cardId, facet, ...fromFsrsCard(createEmptyCard(new Date(now))) };
 }
 
-/**
- * Aplica una calificación a la tarjeta y devuelve el nuevo estado + log.
- * `requestRetention` proviene de los ajustes del usuario (meta de retención).
- */
-export function applyRating(data: FsrsData, rating: Grade, now: number = Date.now(), requestRetention = 0.9): { next: FsrsData; log: Omit<ReviewLog, 'id'> } {
-	const scheduler = makeScheduler(requestRetention);
-	const { card, log } = scheduler.next(toFsrsCard(data), new Date(now), rating);
+/** Aplica una calificación y devuelve la nueva programación + log. */
+export function applyRating(data: Schedule, rating: Grade, cfg: SchedulerConfig, opts: { now?: number; via?: AnswerVia; durationMs?: number } = {}): { next: Schedule; log: Omit<ReviewLog, 'id'> } {
+	const now = opts.now ?? Date.now();
+	const { card, log } = schedulerFor(cfg).next(toFsrsCard(data), new Date(now), rating);
 	return {
-		next: fromFsrsCard(data.cardId, card),
+		next: { ...data, ...fromFsrsCard(card) },
 		log: {
 			cardId: data.cardId,
+			facet: data.facet,
 			rating: log.rating,
 			state: log.state as FsrsState,
 			due: log.due.getTime(),
@@ -75,18 +97,20 @@ export function applyRating(data: FsrsData, rating: Grade, now: number = Date.no
 			last_elapsed_days: log.last_elapsed_days,
 			scheduled_days: log.scheduled_days,
 			reviewedAt: now,
+			via: opts.via,
+			durationMs: opts.durationMs,
 		},
 	};
 }
 
 /** Previsualiza el intervalo (en días) de cada botón sin mutar nada. */
-export function previewIntervals(data: FsrsData, now: number = Date.now(), requestRetention = 0.9): Record<RatingKey, number> {
-	const scheduler = makeScheduler(requestRetention);
-	const record = scheduler.repeat(toFsrsCard(data), new Date(now));
+export function previewIntervals(data: Schedule, cfg: SchedulerConfig, now: number = Date.now()): Record<RatingKey, number> {
+	const record = schedulerFor(cfg).repeat(toFsrsCard(data), new Date(now));
+	const days = (r: Grade) => (record[r].card.due.getTime() - now) / 86_400_000;
 	return {
-		again: record[Rating.Again].card.scheduled_days,
-		hard: record[Rating.Hard].card.scheduled_days,
-		good: record[Rating.Good].card.scheduled_days,
-		easy: record[Rating.Easy].card.scheduled_days,
+		again: days(Rating.Again),
+		hard: days(Rating.Hard),
+		good: days(Rating.Good),
+		easy: days(Rating.Easy),
 	};
 }

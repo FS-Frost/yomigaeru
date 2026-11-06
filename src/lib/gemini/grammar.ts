@@ -1,5 +1,5 @@
 import { stripFurigana } from '$lib/furigana';
-import { generateJson, GeminiError } from './client';
+import { generateJson, validate } from './client';
 import { GrammarBreakdown, grammarGeminiSchema } from './schemas';
 
 export interface GrammarFocus {
@@ -31,10 +31,6 @@ Oración: "${clean}"${focusBlock}
 Si aparece una palabra poco común, un nombre propio, jerga o un término reciente, verifica su lectura y uso con una búsqueda web antes de responder.
 Responde solo con el JSON.`;
 
-	const raw = await generateJson({ prompt, schema: grammarGeminiSchema, useSearch: true });
-	try {
-		return GrammarBreakdown.parse(JSON.parse(raw));
-	} catch {
-		throw new GeminiError('La IA devolvió una respuesta con un formato inesperado. Inténtalo de nuevo.');
-	}
+	const raw = await generateJson({ feature: 'grammar', prompt, schema: grammarGeminiSchema, useSearch: true });
+	return validate(GrammarBreakdown, raw);
 }

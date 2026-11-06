@@ -1,36 +1,44 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { listDecks, createDeck } from '$lib/db/decks';
-	import { createCards, type NewCard } from '$lib/db/cards';
 	import type { Deck } from '$lib/db/schema';
 	import { compressImage, imageFromPaste, type CompressedImage } from '$lib/media/image';
 	import { imageToCards } from '$lib/gemini/imageToCards';
-	import type { GeneratedCard } from '$lib/gemini/schemas';
 	import { GeminiError } from '$lib/gemini/client';
-	import Furigana from '$lib/gui/Furigana.svelte';
+	import { averageCost } from '$lib/gemini/usage';
+	import { fmtUsd } from '$lib/gemini/pricing';
 	import { app } from '$lib/state/app.svelte';
+	import { takePending } from '$lib/inbox';
+	import { toProposals, saveProposals, type Proposal } from '$lib/proposals';
 	import Button from '$lib/gui/Button.svelte';
-	import Field from '$lib/gui/Field.svelte';
 	import Select from '$lib/gui/Select.svelte';
 	import CameraCapture from '$lib/gui/CameraCapture.svelte';
+	import CardProposals from '$lib/gui/CardProposals.svelte';
 
 	let img = $state<CompressedImage | null>(null);
 	let loading = $state(false);
-	let cards = $state<(GeneratedCard & { keep: boolean })[]>([]);
+	let cards = $state<Proposal[]>([]);
 	let decks = $state<Deck[]>([]);
 	let deckId = $state<number | null>(null);
 	let attachImage = $state(true);
-	let refineInstruction = $state('');
 	let cameraOpen = $state(false);
 	let canLiveCamera = $state(true);
+	let estimate = $state<number | null>(null);
 
 	onMount(async () => {
 		canLiveCamera = !!navigator.mediaDevices?.getUserMedia;
 		try {
 			decks = await listDecks();
 			deckId = decks[0]?.id ?? null;
+			estimate = await averageCost('imageToCards');
 		} catch {
 			app.toast('No se pudieron cargar los mazos', 'error');
+		}
+		// Imagen compartida desde otra app (Share Target): se extrae directamente.
+		const shared = takePending('foto');
+		if (shared?.files[0]) {
+			await handleFile(shared.files[0]);
+			if (img) await extract();
 		}
 	});
 
@@ -75,39 +83,23 @@
 		}
 	}
 
-	async function extract() {
+	async function run(instruction?: string) {
 		if (!img) return;
 		loading = true;
 		try {
-			const result = await imageToCards({ mimeType: img.mimeType, base64: img.base64 });
-			cards = result.map((c) => ({ ...c, keep: true }));
+			// En el refinado se envían las tarjetas actuales (sin campos de la UI) para que la IA las ajuste.
+			const previous = instruction !== undefined ? cards.map(({ keep: _k, dups: _d, dupAction: _a, ...c }) => c) : undefined;
+			const result = await imageToCards({ mimeType: img.mimeType, base64: img.base64 }, { instruction, previous });
+			cards = await toProposals(result);
 			if (!cards.length) app.toast('No se detectaron tarjetas.', 'info');
 		} catch (err) {
-			app.toast(err instanceof GeminiError ? err.message : 'Error al extraer', 'error');
+			app.toast(err instanceof GeminiError ? err.message : 'Error al extraer', 'error', { action: { label: 'Reintentar', run: () => void run(instruction) } });
 		} finally {
 			loading = false;
 		}
 	}
 
-	async function refine() {
-		if (!img || !cards.length) return;
-		loading = true;
-		try {
-			// Enviamos las tarjetas actuales (sin `keep`) para que la IA las ajuste.
-			const previous = cards.map(({ keep, ...c }) => c);
-			const result = await imageToCards(
-				{ mimeType: img.mimeType, base64: img.base64 },
-				{ instruction: refineInstruction, previous },
-			);
-			cards = result.map((c) => ({ ...c, keep: true }));
-			refineInstruction = '';
-			if (!cards.length) app.toast('No se detectaron tarjetas.', 'info');
-		} catch (err) {
-			app.toast(err instanceof GeminiError ? err.message : 'Error al refinar', 'error');
-		} finally {
-			loading = false;
-		}
-	}
+	const extract = () => run();
 
 	async function ensureDeck(): Promise<number> {
 		if (deckId !== null) return deckId;
@@ -118,27 +110,15 @@
 	}
 
 	async function save() {
-		const chosen = cards.filter((c) => c.keep);
-		if (!chosen.length) return;
-		const payload: NewCard[] = [];
+		if (!cards.some((c) => c.keep)) return;
+		let res;
 		try {
-			const target = await ensureDeck();
-			for (const c of chosen) {
-				payload.push({
-					deckId: target,
-					front: c.front,
-					back: c.back,
-					reading: c.reading || undefined,
-					context: [c.context, ...c.examples.map((e) => `${e.jp} — ${e.es}`)].filter(Boolean).join('\n') || undefined,
-					imageBlob: attachImage && img ? img.blob : undefined,
-				});
-			}
-			await createCards(payload);
+			res = await saveProposals($state.snapshot(cards) as Proposal[], await ensureDeck(), attachImage && img ? img.blob : undefined);
 		} catch {
 			app.toast('No se pudieron guardar las tarjetas', 'error');
 			return;
 		}
-		app.toast(`${payload.length} tarjetas guardadas`, 'success');
+		app.toast(`${res.created} tarjetas guardadas${res.merged ? ` · ${res.merged} fusionadas` : ''}`, 'success');
 		cards = [];
 		img = null;
 	}
@@ -147,17 +127,19 @@
 <svelte:window onpaste={onPaste} />
 
 <h1 class="mb-2 text-2xl font-bold">Foto a tarjeta</h1>
-<p class="mb-4 text-sm text-slate-500">Sube una imagen, usa la cámara o pega con Ctrl+V.</p>
+<p class="mb-4 text-sm text-slate-500">Sube una imagen, usa la cámara, pega con Ctrl+V o compártela desde otra app.</p>
 
 <div class="flex flex-wrap gap-2">
-	<label class="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium transition select-none hover:bg-slate-50 active:scale-[.98]">
+	<label class="bg-surface inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 px-4 text-sm font-medium transition select-none hover:bg-slate-50 active:scale-[.98]">
 		Elegir archivo
 		<input type="file" accept="image/*" class="hidden" onchange={(e) => handleFile((e.currentTarget as HTMLInputElement).files?.[0])} />
 	</label>
 	{#if canLiveCamera}
 		<Button variant="secondary" onclick={() => (cameraOpen = true)}>📷 Cámara</Button>
 	{:else}
-		<label class="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium transition select-none hover:bg-slate-50 active:scale-[.98]">
+		<label
+			class="bg-surface inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 px-4 text-sm font-medium transition select-none hover:bg-slate-50 active:scale-[.98]"
+		>
 			📷 Cámara
 			<input type="file" accept="image/*" capture="environment" class="hidden" onchange={(e) => handleFile((e.currentTarget as HTMLInputElement).files?.[0])} />
 		</label>
@@ -167,63 +149,37 @@
 
 <CameraCapture bind:open={cameraOpen} oncapture={onCameraCapture} />
 
-{#if img}
+{#if img && !cards.length}
 	<div class="mt-4">
 		<img src={img.dataUrl} alt="Vista previa" class="max-h-64 rounded-lg border border-slate-200" />
-		<div class="mt-3">
+		<div class="mt-3 flex items-center gap-3">
 			<Button {loading} onclick={extract}>Extraer tarjetas</Button>
+			{#if estimate != null}<span class="text-xs text-slate-400">≈ {fmtUsd(estimate)}</span>{/if}
 		</div>
 	</div>
 {/if}
 
 {#if cards.length}
-	<div class="mt-6 space-y-3">
-		{#each cards as card, i (i)}
-			<label class="block rounded-lg border bg-white p-3 transition {card.keep ? 'border-sky-400 ring-1 ring-sky-200' : 'border-slate-200'}">
-				<div class="flex items-start gap-3">
-					<input type="checkbox" bind:checked={card.keep} class="mt-1 size-5 shrink-0 accent-sky-600" />
-					<div class="grid flex-1 gap-2 sm:grid-cols-2">
-						<div class="text-lg sm:col-span-2"><Furigana text={card.front} /></div>
-						<Field bind:value={card.front} placeholder="Frente (japonés, ej. 私[わたし])" class="sm:col-span-2" />
-						<Field bind:value={card.back} placeholder="Significado" />
-						<Field bind:value={card.reading} placeholder="Lectura (kana)" />
-						<Field bind:value={card.context} placeholder="Contexto" class="sm:col-span-2" />
-					</div>
-				</div>
-			</label>
-		{/each}
+	<CardProposals bind:cards imageUrl={img?.dataUrl} {loading} onrefine={(i) => run(i)} onretry={extract} />
 
-		<!-- Refinar con IA -->
-		<div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-			<Field
-				type="textarea"
-				rows={2}
-				bind:value={refineInstruction}
-				placeholder="Instrucciones para la IA (ej. 'solo verbos', 'corrige las lecturas', 'añade más ejemplos')"
-			/>
-			<div class="mt-2 flex gap-2">
-				<Button variant="secondary" {loading} onclick={refine}>Refinar con IA</Button>
-				<Button variant="secondary" disabled={loading} onclick={extract}>Extraer de nuevo</Button>
-			</div>
-		</div>
+	<label class="mt-3 flex min-h-11 items-center gap-3 text-sm text-slate-600">
+		<input type="checkbox" bind:checked={attachImage} class="size-5 accent-sky-600" /> Adjuntar la imagen (permite la cara «Imagen»: recordar la palabra en su viñeta)
+	</label>
 
-		<label class="flex min-h-11 items-center gap-3 text-sm text-slate-600">
-			<input type="checkbox" bind:checked={attachImage} class="size-5 accent-sky-600" /> Adjuntar la imagen como contexto visual
-		</label>
-
-		<div class="h-24 sm:hidden" aria-hidden="true"></div>
-	</div>
+	<div class="h-24 sm:hidden" aria-hidden="true"></div>
 
 	<!-- Barra de guardado al alcance del pulgar -->
 	<div class="bottom-nav pointer-events-none fixed inset-x-0 z-30 px-4 sm:static sm:mt-4 sm:px-0">
-		<div class="pointer-events-auto mx-auto flex max-w-3xl items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+		<div
+			class="bg-surface/95 pointer-events-auto mx-auto flex max-w-3xl items-center gap-2 rounded-xl border border-slate-200 p-2 shadow-lg backdrop-blur sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none"
+		>
 			<Select bind:value={deckId} class="flex-1">
 				<option value={null}>+ Nuevo mazo "Desde imágenes"</option>
 				{#each decks as d (d.id)}
 					<option value={d.id}>{d.name}</option>
 				{/each}
 			</Select>
-			<Button variant="primary" class="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800" onclick={save}>Guardar</Button>
+			<Button variant="success" onclick={save}>Guardar ({cards.filter((c) => c.keep).length})</Button>
 		</div>
 	</div>
 {/if}

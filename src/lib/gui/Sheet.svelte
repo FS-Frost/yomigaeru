@@ -28,12 +28,11 @@
 
 {#if open}
 	<!-- Overlay -->
-	<button type="button" class="fixed inset-0 z-40 cursor-default bg-slate-900/40" transition:fade={{ duration: 150 }} onclick={close} aria-label="Cerrar"
-	></button>
+	<button type="button" class="fixed inset-0 z-40 cursor-default bg-black/50" transition:fade={{ duration: 150 }} onclick={close} aria-label="Cerrar"></button>
 
 	<!-- Panel anclado abajo -->
 	<div
-		class="pb-safe fixed inset-x-0 bottom-0 z-50 mx-auto max-w-lg rounded-t-2xl bg-white shadow-2xl"
+		class="pb-safe bg-surface fixed inset-x-0 bottom-0 z-50 mx-auto max-w-lg rounded-t-2xl shadow-2xl"
 		transition:fly={{ y: 300, duration: 200 }}
 		role="dialog"
 		aria-modal="true"

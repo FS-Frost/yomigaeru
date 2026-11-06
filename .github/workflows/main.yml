@@ -22,6 +22,9 @@ jobs:
             - name: Svelte check
               run: bun run check
 
+            - name: Tests
+              run: bun test
+
             - name: Build
               # BASE_PATH debe coincidir con el nombre del repo en GitHub Pages.
               run: BASE_PATH=/yomigaeru bun run build

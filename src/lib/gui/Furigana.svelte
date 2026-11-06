@@ -1,11 +1,7 @@
 <script lang="ts">
 	import { parseFurigana } from '$lib/furigana';
 
-	let {
-		text,
-		class: className = '',
-		showReadings = true,
-	}: { text: string; class?: string; showReadings?: boolean } = $props();
+	let { text, class: className = '', showReadings = true }: { text: string; class?: string; showReadings?: boolean } = $props();
 
 	const segments = $derived(parseFurigana(text));
 </script>

@@ -114,9 +114,7 @@
 			{#if error}
 				<div class="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 px-6 text-center">
 					<p class="text-sm text-white">{error}</p>
-					<button type="button" onclick={close} class="min-h-11 rounded-lg bg-white px-5 text-sm font-medium text-slate-900 active:scale-[.98]">
-						Cerrar
-					</button>
+					<button type="button" onclick={close} class="min-h-11 rounded-lg bg-white px-5 text-sm font-medium text-slate-900 active:scale-[.98]"> Cerrar </button>
 				</div>
 			{:else if starting}
 				<div class="absolute inset-0 flex items-center justify-center bg-black/60">
@@ -139,9 +137,7 @@
 
 		<!-- Controles -->
 		<div class="pb-safe flex items-center justify-between gap-4 bg-black px-6 py-5">
-			<button type="button" onclick={close} class="min-h-11 px-3 text-sm font-medium text-white/80 active:scale-[.98]">
-				Cancelar
-			</button>
+			<button type="button" onclick={close} class="min-h-11 px-3 text-sm font-medium text-white/80 active:scale-[.98]"> Cancelar </button>
 
 			<button
 				type="button"

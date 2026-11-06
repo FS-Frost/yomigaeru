@@ -1,4 +1,4 @@
-import { generateJson, GeminiError } from './client';
+import { generateJson, validate } from './client';
 import { GeneratedCard, cardGeminiSchema } from './schemas';
 
 /** Genera una tarjeta completa a partir de una palabra/frase japonesa o en español. */
@@ -15,10 +15,6 @@ Reglas:
 Si la palabra es poco común, un nombre propio, jerga o un término reciente, verifica su lectura y uso con una búsqueda web antes de responder.
 Responde solo con el JSON.`;
 
-	const raw = await generateJson({ prompt, schema: cardGeminiSchema, useSearch: true });
-	try {
-		return GeneratedCard.parse(JSON.parse(raw));
-	} catch {
-		throw new GeminiError('La IA devolvió una respuesta con un formato inesperado. Inténtalo de nuevo.');
-	}
+	const raw = await generateJson({ feature: 'generateCard', prompt, schema: cardGeminiSchema, useSearch: true });
+	return validate(GeneratedCard, raw);
 }

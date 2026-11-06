@@ -21,7 +21,7 @@
 		<select
 			bind:value
 			{onchange}
-			class="min-h-11 w-full min-w-0 appearance-none rounded-lg border border-slate-300 bg-white py-2 pr-9 pl-3 text-base text-slate-900 transition focus-visible:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-200 focus-visible:outline-none"
+			class="bg-surface min-h-11 w-full min-w-0 appearance-none rounded-lg border border-slate-300 py-2 pr-9 pl-3 text-base text-slate-900 transition focus-visible:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-200 focus-visible:outline-none"
 		>
 			{@render children()}
 		</select>

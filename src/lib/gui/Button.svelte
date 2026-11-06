@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { HTMLButtonAttributes } from 'svelte/elements';
 
-	type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
+	type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
 	type Size = 'md' | 'lg';
 
 	let {
@@ -27,9 +27,10 @@
 	} & HTMLButtonAttributes = $props();
 
 	const variants: Record<Variant, string> = {
-		primary: 'bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950',
-		secondary: 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 active:bg-slate-100',
+		primary: 'bg-brand text-brand-fg hover:opacity-90 active:opacity-80',
+		secondary: 'border border-slate-300 bg-surface text-slate-800 hover:bg-slate-50 active:bg-slate-100',
 		danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800',
+		success: 'bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800',
 		ghost: 'text-slate-700 hover:bg-slate-100 active:bg-slate-200',
 	};
 	const sizes: Record<Size, string> = {
