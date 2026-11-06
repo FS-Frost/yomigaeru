@@ -1,0 +1,1 @@
+var e=``+new URL(`../assets/sql-wasm-browser.B-9ndiyM.wasm`,import.meta.url).href;export{e as default};

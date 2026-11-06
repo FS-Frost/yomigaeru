@@ -1,0 +1,1 @@
+var e=``+new URL(`../assets/fsrs_browser_bg.B5-fOzVB.wasm`,import.meta.url).href;export{e as default};

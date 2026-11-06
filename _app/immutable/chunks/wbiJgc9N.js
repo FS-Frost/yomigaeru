@@ -1,0 +1,1 @@
+var e=`yomigaeru-inbox`,t=`/__inbox/meta.json`;function n(e,t){let n=e.toLowerCase();return t.startsWith(`image/`)?`image`:n.endsWith(`.json`)||t===`application/json`?`backup`:n.endsWith(`.apkg`)||n.endsWith(`.tsv`)||n.endsWith(`.csv`)||t===`text/csv`||t===`text/tab-separated-values`?`anki`:n.endsWith(`.txt`)||t.startsWith(`text/`)?`text`:`other`}export{t as n,n as r,e as t};
