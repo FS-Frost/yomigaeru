@@ -11,6 +11,7 @@ export const FEATURES = {
 	grammar: 'Explicar gramática',
 	judge: 'Juez de producción',
 	tts: 'Audio natural',
+	probe: 'Pruebas en Ajustes',
 } as const;
 export type Feature = keyof typeof FEATURES;
 
@@ -21,9 +22,11 @@ export interface UsageMeta {
 	cachedContentTokenCount?: number;
 }
 
-export class BudgetError extends Error {}
+export class BudgetError extends Error {
+	override name = 'BudgetError';
+}
 
-/** Guarda una llamada. Las fallidas cuentan con costo 0. */
+/** Guarda una llamada. Si hay `usage` (también en una cortada a medias) se cobra; si no, costo 0. */
 export async function recordUsage(call: { feature: Feature; model: string; usage?: UsageMeta; ok?: boolean }): Promise<void> {
 	const ok = call.ok ?? true;
 	const prompt = call.usage?.promptTokenCount ?? 0;
@@ -31,7 +34,7 @@ export async function recordUsage(call: { feature: Feature; model: string; usage
 	const output = (call.usage?.candidatesTokenCount ?? 0) + (call.usage?.thoughtsTokenCount ?? 0);
 	const cached = call.usage?.cachedContentTokenCount ?? 0;
 	const { modelPrices } = await getAllSettings();
-	const costUsd = ok ? costOf(priceFor(call.model, modelPrices), prompt, output, cached) : 0;
+	const costUsd = call.usage ? costOf(priceFor(call.model, modelPrices), prompt, output, cached) : 0;
 	try {
 		await db.geminiUsage.add({ at: Date.now(), feature: call.feature, model: call.model, promptTokens: prompt, outputTokens: output, cachedTokens: cached, ok, costUsd });
 	} catch {

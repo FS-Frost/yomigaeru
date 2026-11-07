@@ -39,7 +39,7 @@
 		aria-label={title || 'Diálogo'}
 	>
 		<div class="mx-auto mt-2 h-1.5 w-10 rounded-full bg-slate-300" aria-hidden="true"></div>
-		<div class="px-4 pt-3 pb-4">
+		<div class="max-h-[85dvh] overflow-y-auto overscroll-contain px-4 pt-3 pb-4">
 			{#if title}
 				<h2 class="mb-3 text-lg font-semibold text-slate-900">{title}</h2>
 			{/if}

@@ -108,8 +108,8 @@
 			app.toast(`${payload.length} tarjetas importadas${skipped ? ` · ${skipped} duplicadas omitidas` : ''}`, 'success');
 			file = null;
 			ondone();
-		} catch {
-			app.toast('No se pudo importar', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo importar');
 		} finally {
 			busy = false;
 		}

@@ -1,135 +1,145 @@
 import { GoogleGenAI, type GenerateContentConfig, type GenerateContentResponse, type Schema } from '@google/genai';
-import { getSetting } from '$lib/db/settings';
-import { assertBudget, BudgetError, recordUsage, type Feature } from './usage';
+import { getAllSettings, getSetting } from '$lib/db/settings';
+import { classifyError, geminiError, GeminiError, isTransient } from './errors';
+import { buildJsonRequest, type InlineImage } from './request';
+import { consumeJsonStream, type LoopCheck, type Stage, type UsageLike } from './stream';
+import { assertBudget, recordUsage, type Feature } from './usage';
 
-/** Error con mensaje en español listo para mostrar. */
-export class GeminiError extends Error {}
-
-export interface InlineImage {
-	mimeType: string;
-	/** Datos en base64 sin el prefijo `data:...;base64,`. */
-	base64: string;
-}
+// Reexportados por compatibilidad: las rutas importan desde aquí.
+export { GeminiError, errorMessage, classifyError, isTransient, errorStatus } from './errors';
+export { parseJsonLoose } from './stream';
+export type { Stage } from './stream';
+export { isGen3Plus, type InlineImage } from './request';
 
 let client: { key: string; ai: GoogleGenAI } | null = null;
+/** Solo tests: sustituye el SDK por un doble (`models.generateContent[Stream]`). */
+let testClient: GoogleGenAI | null = null;
+export function _setTestClient(ai: unknown): void {
+	testClient = ai as GoogleGenAI | null;
+}
 
 /** ¿Hay API key configurada? */
 export async function hasGemini(): Promise<boolean> {
 	return !!(await getSetting('apiKey'));
 }
 
-async function getClient(): Promise<GoogleGenAI> {
-	const apiKey = await getSetting('apiKey');
-	if (!apiKey) throw new GeminiError('Falta la API key de Gemini. Configúrala en Ajustes.');
-	// Se reutiliza la instancia mientras la key no cambie.
+/** Cliente del SDK (reutilizado mientras la key no cambie). `key` permite probar una key sin guardarla. */
+export async function geminiClient(key?: string): Promise<GoogleGenAI> {
+	const apiKey = key ?? (await getSetting('apiKey'));
+	if (!apiKey) throw geminiError('no-key');
+	if (testClient) return testClient;
+	if (key) return new GoogleGenAI({ apiKey });
 	if (client?.key !== apiKey) client = { key: apiKey, ai: new GoogleGenAI({ apiKey }) };
 	return client.ai;
 }
 
-/** Código HTTP de un error del SDK, si se puede deducir. */
-export function errorStatus(e: unknown): number | null {
-	const any = e as { status?: number; code?: number } | null;
-	if (typeof any?.status === 'number') return any.status;
-	if (typeof any?.code === 'number') return any.code;
-	const raw = e instanceof Error ? e.message : String(e);
-	const m = raw.match(/"code"\s*:\s*(\d{3})/) ?? raw.match(/\b(400|401|403|404|429|500|502|503|504)\b/);
-	return m ? Number(m[1]) : null;
-}
-
-/** Errores pasajeros: vale la pena reintentar. */
-export function isTransient(e: unknown): boolean {
-	const s = errorStatus(e);
-	return s === 429 || s === 500 || s === 502 || s === 503 || s === 504;
-}
-
-/** Mensaje en español para un error de Gemini. */
-export function errorMessage(e: unknown): string {
-	if (e instanceof GeminiError || e instanceof BudgetError) return e.message;
-	const raw = e instanceof Error ? e.message : String(e);
-	const status = errorStatus(e);
-	if (status === 500 || status === 502 || status === 503 || status === 504) return 'Gemini no está disponible ahora mismo. Inténtalo de nuevo en unos segundos.';
-	if (status === 429) return 'Gemini limitó las peticiones (cuota o demasiadas seguidas). Espera un poco y reintenta.';
-	if (status === 401 || status === 403) return 'Gemini rechazó la API key (revísala en Ajustes; si la restringiste por dominio, incluye esta dirección).';
-	if (status === 404) return 'El modelo de Gemini configurado no existe (revísalo en Ajustes).';
-	if (/failed to fetch|network/i.test(raw)) return 'Sin conexión: la IA necesita internet.';
-	// Mensajes JSON anidados del SDK: extraer el texto legible.
-	const inner = raw
-		.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/g)
-		?.pop()
-		?.replace(/^"message"\s*:\s*"/, '')
-		.replace(/"$/, '');
-	const msg = inner ? inner.replace(/\\+n/g, ' ').replace(/\\+"/g, '"').replace(/\\+/g, '') : raw;
-	return `Error de Gemini: ${msg.length > 300 ? msg.slice(0, 300) + '…' : msg}`;
+/** Sin conexión (si el navegador lo sabe): falla al instante en vez de esperar al timeout. */
+function assertOnline(): void {
+	if (typeof navigator !== 'undefined' && navigator.onLine === false) throw geminiError('offline');
 }
 
 /** Reintenta `fn` ante errores pasajeros (1 s, 3 s). */
-export async function withRetry<T>(fn: () => Promise<T>, delays = [1000, 3000]): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, delays = [1000, 3000], signal?: AbortSignal): Promise<T> {
 	for (let i = 0; ; i++) {
 		try {
 			return await fn();
 		} catch (e) {
-			if (i >= delays.length || !isTransient(e)) throw e;
+			if (i >= delays.length || !isTransient(e) || signal?.aborted) throw e;
 			await new Promise((r) => setTimeout(r, delays[i]));
 		}
 	}
 }
 
+/** Errores que ocurren antes de llamar (no consumen cuota): no se registran. */
+const notCalled = (e: GeminiError) => e.code === 'no-key' || e.code === 'offline' || e.code === 'budget';
+
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 /**
  * generateContent con presupuesto, reintentos y registro de uso (también si falla).
- * Lanza siempre `GeminiError` con mensaje en español.
+ * Lanza siempre `GeminiError`. Para respuestas no-JSON (audio).
  */
 export async function generateTracked(opts: { feature: Feature; model?: string; parts: Part[]; config: GenerateContentConfig }): Promise<GenerateContentResponse> {
 	const model = opts.model ?? (await getSetting('geminiModel'));
 	try {
+		assertOnline();
 		await assertBudget();
-		const ai = await getClient();
+		const ai = await geminiClient();
 		const res = await withRetry(() => ai.models.generateContent({ model, contents: [{ role: 'user', parts: opts.parts }], config: opts.config }));
 		await recordUsage({ feature: opts.feature, model, usage: res.usageMetadata });
 		return res;
 	} catch (err) {
-		if (err instanceof GeminiError || err instanceof BudgetError) throw new GeminiError(err.message);
-		await recordUsage({ feature: opts.feature, model, ok: false });
-		throw new GeminiError(errorMessage(err));
+		const e = classifyError(err);
+		if (!notCalled(e)) await recordUsage({ feature: opts.feature, model, ok: false });
+		throw e;
 	}
 }
 
-/** Extrae JSON aunque el modelo lo envuelva en ```json … ```. */
-export function parseJsonLoose(text: string): unknown {
-	try {
-		return JSON.parse(text);
-	} catch {
-		const m = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-		if (m) return JSON.parse(m[0]);
-		throw new GeminiError('La IA devolvió una respuesta con un formato inesperado. Inténtalo de nuevo.');
-	}
+export interface JsonOptions {
+	feature: Feature;
+	prompt: string;
+	schema: Schema;
+	image?: InlineImage;
+	/** Tope de tokens de salida (frena bucles y su costo). */
+	maxOutputTokens?: number;
+	loop?: LoopCheck;
+	signal?: AbortSignal;
+	onStage?: (s: Stage) => void;
+	/** Texto JSON acumulado (para mostrar tarjetas a medida que llegan). */
+	onText?: (text: string) => void;
 }
 
 /**
- * Llama a Gemini forzando salida JSON con `responseSchema` y devuelve el objeto parseado
- * (sin validar). Los llamadores lo validan con Zod.
+ * Llama a Gemini en streaming forzando JSON con `responseSchema` y devuelve el objeto parseado
+ * (sin validar: los llamadores validan con Zod). Corta bucles de repetición al vuelo, respeta el
+ * `finishReason` y registra el uso siempre. Lanza `GeminiError` (con `partial` si llegó algo).
  */
-export async function generateJson(opts: { feature: Feature; prompt: string; schema: Schema; image?: InlineImage; useSearch?: boolean }): Promise<unknown> {
-	const model = await getSetting('geminiModel');
-	const parts: Part[] = [{ text: opts.prompt }];
-	if (opts.image) parts.push({ inlineData: { mimeType: opts.image.mimeType, data: opts.image.base64 } });
+export async function generateJson(opts: JsonOptions): Promise<unknown> {
+	const { geminiModel: model, webSearch } = await getAllSettings();
+	const req = buildJsonRequest({ model, prompt: opts.prompt, schema: opts.schema, image: opts.image, webSearch, maxOutputTokens: opts.maxOutputTokens });
 
-	const config: GenerateContentConfig = { responseMimeType: 'application/json', responseSchema: opts.schema };
-	// La búsqueda web (grounding) solo es compatible con salida JSON en la serie Gemini 3.
-	if (opts.useSearch && model.startsWith('gemini-3')) config.tools = [{ googleSearch: {} }];
+	const controller = new AbortController();
+	const onAbort = () => controller.abort();
+	opts.signal?.addEventListener('abort', onAbort);
 
-	const res = await generateTracked({ feature: opts.feature, model, parts, config });
-	const text = res.text;
-	if (!text) throw new GeminiError('Respuesta vacía de Gemini.');
-	return parseJsonLoose(text);
+	let recorded = false;
+	const record = async (usage: UsageLike | undefined, ok: boolean) => {
+		if (recorded) return;
+		recorded = true;
+		await recordUsage({ feature: opts.feature, model, usage, ok });
+	};
+
+	try {
+		assertOnline();
+		await assertBudget();
+		const ai = await geminiClient();
+		opts.onStage?.('sending');
+		const stream = await withRetry(() => ai.models.generateContentStream({ model, ...req, config: { ...req.config, abortSignal: controller.signal } }), undefined, opts.signal);
+		return await consumeJsonStream(stream, {
+			onStage: opts.onStage,
+			onText: opts.onText,
+			loop: opts.loop,
+			signal: opts.signal,
+			abort: () => controller.abort(),
+			onUsage: (u, ok) => record(u, ok),
+		});
+	} catch (err) {
+		const e = classifyError(err);
+		if (!notCalled(e)) await record(undefined, false);
+		if (opts.signal?.aborted && e.code !== 'aborted') throw geminiError('aborted').withPartial(e.partial ?? '');
+		throw e;
+	} finally {
+		opts.signal?.removeEventListener('abort', onAbort);
+	}
 }
 
-/** Valida con Zod y traduce el fallo a un error en español. */
-export function validate<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
-	try {
-		return schema.parse(value);
-	} catch {
-		throw new GeminiError('La IA devolvió una respuesta con un formato inesperado. Inténtalo de nuevo.');
-	}
+/** Valida con Zod y traduce el fallo a un `GeminiError` con el detalle del problema. */
+export function validate<T>(schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } } }, value: unknown): T {
+	const r = schema.safeParse(value);
+	if (r.success) return r.data;
+	const detail = r.error.issues
+		.slice(0, 5)
+		.map((i) => `${i.path.map(String).join('.') || '(raíz)'}: ${i.message}`)
+		.join('; ');
+	throw new GeminiError(null, { code: 'invalid', detail });
 }

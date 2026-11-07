@@ -1,6 +1,7 @@
 import { stripFurigana } from '$lib/furigana';
 import type { Card } from '$lib/db/schema';
 import { generateJson, validate } from './client';
+import { retryOnBadOutput } from './cardgen';
 import { Judgement, judgeGeminiSchema } from './schemas';
 
 /**
@@ -21,6 +22,5 @@ Evalúa:
 - "corrected": la forma correcta con furigana estilo Anki (漢字[かな]).
 Responde solo con el JSON.`;
 
-	const raw = await generateJson({ feature: 'judge', prompt, schema: judgeGeminiSchema });
-	return validate(Judgement, raw);
+	return retryOnBadOutput(async () => validate(Judgement, await generateJson({ feature: 'judge', prompt, schema: judgeGeminiSchema, maxOutputTokens: 2048 })));
 }

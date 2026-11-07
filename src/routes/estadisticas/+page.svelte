@@ -12,8 +12,8 @@
 	onMount(async () => {
 		try {
 			stats = await loadStats();
-		} catch {
-			app.toast('No se pudieron calcular las estadísticas', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudieron calcular las estadísticas');
 		}
 	});
 

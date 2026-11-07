@@ -35,7 +35,7 @@ export function onOpenedFiles(cb: (files: File[]) => void): void {
 }
 
 // Entrega a la pantalla de destino (navegación SPA: mismo documento).
-export type PendingTarget = 'foto' | 'crear' | 'ajustes' | 'mazos';
+export type PendingTarget = 'crear' | 'ajustes' | 'mazos';
 export type Pending = { to: PendingTarget; text?: string; title?: string; files: File[]; long?: boolean };
 let pending: Pending | null = null;
 

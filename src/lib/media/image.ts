@@ -51,3 +51,39 @@ export function imageFromPaste(e: ClipboardEvent): File | null {
 	}
 	return null;
 }
+
+async function canvasBlob(canvas: HTMLCanvasElement, type = 'image/jpeg', quality = 0.92): Promise<Blob> {
+	return new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob falló'))), type, quality));
+}
+
+/** Gira una imagen 90° en sentido horario. */
+export async function rotateImage(file: Blob): Promise<Blob> {
+	const bmp = await createImageBitmap(file);
+	const canvas = document.createElement('canvas');
+	canvas.width = bmp.height;
+	canvas.height = bmp.width;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) throw new Error('No se pudo obtener el contexto 2D del canvas.');
+	ctx.translate(canvas.width, 0);
+	ctx.rotate(Math.PI / 2);
+	ctx.drawImage(bmp, 0, 0);
+	bmp.close();
+	return canvasBlob(canvas);
+}
+
+/** Recorta una imagen a la caja [ymin, xmin, ymax, xmax] (0–1000). */
+export async function cropImage(file: Blob, [y0, x0, y1, x1]: [number, number, number, number]): Promise<Blob> {
+	const bmp = await createImageBitmap(file);
+	const sx = Math.round((x0 / 1000) * bmp.width);
+	const sy = Math.round((y0 / 1000) * bmp.height);
+	const sw = Math.max(1, Math.round(((x1 - x0) / 1000) * bmp.width));
+	const sh = Math.max(1, Math.round(((y1 - y0) / 1000) * bmp.height));
+	const canvas = document.createElement('canvas');
+	canvas.width = sw;
+	canvas.height = sh;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) throw new Error('No se pudo obtener el contexto 2D del canvas.');
+	ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, sw, sh);
+	bmp.close();
+	return canvasBlob(canvas);
+}

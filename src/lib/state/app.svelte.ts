@@ -1,4 +1,7 @@
+import { goto } from '$app/navigation';
+import { base } from '$app/paths';
 import { getAllSettings, type SettingsMap } from '$lib/db/settings';
+import { describeError } from '$lib/errors';
 
 export interface ToastAction {
 	label: string;
@@ -12,6 +15,8 @@ export interface Toast {
 	kind: ToastKind;
 	message: string;
 	detail?: string;
+	/** Detalle técnico plegable y copiable. */
+	tech?: string;
 	actions: ToastAction[];
 	/** Sin auto-cierre (errores y avisos con acción importante). */
 	persistent: boolean;
@@ -25,6 +30,8 @@ export interface ToastOptions {
 	action?: ToastAction;
 	actions?: ToastAction[];
 	detail?: string;
+	/** Detalle técnico plegable y copiable. */
+	tech?: string;
 	/** Duración en ms antes del auto-cierre. */
 	duration?: number;
 	/** Reemplaza un toast anterior con la misma clave. */
@@ -57,9 +64,25 @@ class AppState {
 		const persistent = opts.persistent ?? kind === 'error';
 		// Los toasts con acción duran más para dar tiempo a pulsarla.
 		const duration = opts.duration ?? (actions.length ? Math.max(DEFAULT_MS[kind], 7000) : DEFAULT_MS[kind]);
-		this.toasts.push({ id, kind, message, detail: opts.detail, actions, persistent, remaining: duration, key: opts.key });
+		this.toasts.push({ id, kind, message, detail: opts.detail, tech: opts.tech, actions, persistent, remaining: duration, key: opts.key });
 		if (!persistent) this.resume(id);
 		return id;
+	}
+
+	/**
+	 * Aviso de error a partir de cualquier excepción (IA, IndexedDB, red…): mensaje claro, acción
+	 * adecuada (Reintentar / Ajustes / Copias / Recargar) y detalle técnico plegable.
+	 * Una cancelación del usuario no es un error: no muestra nada.
+	 */
+	error(e: unknown, fallback = 'Algo falló', opts: { retry?: () => void; detail?: string; key?: string } = {}): number | null {
+		if ((e as { code?: string } | null)?.code === 'aborted') return null;
+		const u = describeError(e, fallback);
+		const actions: ToastAction[] = [];
+		if (u.action === 'retry' && opts.retry) actions.push({ label: 'Reintentar', run: opts.retry });
+		if (u.action === 'settings') actions.push({ label: 'Ajustes', run: () => void goto(`${base}/ajustes#ia`) });
+		if (u.action === 'backups') actions.push({ label: 'Copias', run: () => void goto(`${base}/ajustes#datos`) });
+		if (u.action === 'reload') actions.push({ label: 'Recargar', run: () => location.reload() });
+		return this.toast(u.message, 'error', { actions, tech: u.tech, detail: opts.detail, key: opts.key ?? u.key });
 	}
 
 	/** Pausa el auto-cierre (hover/foco). */

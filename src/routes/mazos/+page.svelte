@@ -14,7 +14,6 @@
 	import { cardsToTsv } from '$lib/anki';
 	import { takePending } from '$lib/inbox';
 	import { synthesizeJapanese } from '$lib/gemini/tts';
-	import { GeminiError } from '$lib/gemini/client';
 	import { averageCost } from '$lib/gemini/usage';
 	import { fmtUsd } from '$lib/gemini/pricing';
 	import { app } from '$lib/state/app.svelte';
@@ -42,6 +41,7 @@
 	let globalNewPerDay = $state(20);
 
 	let newDeckName = $state('');
+	let newDeckOpen = $state(false);
 	let newDeckDesc = $state('');
 	let form = $state({ front: '', back: '', reading: '', context: '' });
 
@@ -106,8 +106,8 @@
 		if (openDeck === null) return;
 		try {
 			await loadCards(id);
-		} catch {
-			app.toast('No se pudieron cargar las tarjetas', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudieron cargar las tarjetas');
 		}
 	}
 
@@ -119,8 +119,8 @@
 			newDeckName = '';
 			newDeckDesc = '';
 			await reloadDecks();
-		} catch {
-			app.toast('No se pudo crear el mazo', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo crear el mazo');
 			return;
 		}
 		app.toast('Mazo creado', 'success');
@@ -142,8 +142,8 @@
 			});
 			editingDeckId = null;
 			await reloadDecks();
-		} catch {
-			app.toast('No se pudo actualizar el mazo', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo actualizar el mazo');
 			return;
 		}
 		app.toast('Mazo actualizado', 'success');
@@ -155,8 +155,8 @@
 			if (openDeck === id) openDeck = null;
 			if (editingDeckId === id) editingDeckId = null;
 			await reloadDecks();
-		} catch {
-			app.toast('No se pudo borrar el mazo', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo borrar el mazo');
 			return;
 		}
 		app.toast('Mazo borrado', 'success');
@@ -168,8 +168,8 @@
 			const tsv = cardsToTsv(list, deck.name);
 			downloadBlob(new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8' }), `${deck.name.replace(/[\\/:*?"<>|]/g, '_')}.tsv`);
 			app.toast(`${list.length} tarjetas exportadas para Anki`, 'success', { detail: 'En Anki: Archivo → Importar. La furigana 漢字[かな] funciona con el complemento Japanese Support.' });
-		} catch {
-			app.toast('No se pudo exportar el mazo', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo exportar el mazo');
 		}
 	}
 
@@ -186,8 +186,8 @@
 			form = { front: '', back: '', reading: '', context: '' };
 			await loadCards(openDeck);
 			await reloadDecks();
-		} catch {
-			app.toast('No se pudo añadir la tarjeta', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo añadir la tarjeta');
 			return;
 		}
 		app.toast('Tarjeta añadida', 'success');
@@ -236,8 +236,8 @@
 			if (cardForm.dropImage) await gcImages();
 			editingCardId = null;
 			if (openDeck !== null) await loadCards(openDeck);
-		} catch {
-			app.toast('No se pudo actualizar la tarjeta', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo actualizar la tarjeta');
 			return;
 		}
 		app.toast('Tarjeta actualizada', 'success');
@@ -251,8 +251,8 @@
 			if (editingCardId === id) editingCardId = null;
 			if (openDeck !== null) await loadCards(openDeck);
 			await reloadDecks();
-		} catch {
-			app.toast('No se pudo borrar la tarjeta', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo borrar la tarjeta');
 			return;
 		}
 		if (!snap) return;
@@ -264,8 +264,8 @@
 						await restoreCard(snap);
 						if (openDeck !== null) await loadCards(openDeck);
 						await reloadDecks();
-					} catch {
-						app.toast('No se pudo restaurar la tarjeta', 'error');
+					} catch (e) {
+						app.error(e, 'No se pudo restaurar la tarjeta');
 					}
 				},
 			},
@@ -278,8 +278,8 @@
 			if (openDeck !== null) await loadCards(openDeck);
 			await reloadDecks();
 			app.toast(card.suspended ? 'Tarjeta reanudada' : 'Tarjeta suspendida', 'success');
-		} catch {
-			app.toast('No se pudo cambiar el estado', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo cambiar el estado');
 		}
 	}
 
@@ -288,8 +288,8 @@
 			await pauseCard(card.id!, PAUSE_DAYS);
 			await reloadDecks();
 			app.toast(`Pausada ${PAUSE_DAYS} días`, 'success');
-		} catch {
-			app.toast('No se pudo pausar', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo pausar');
 		}
 	}
 
@@ -299,8 +299,8 @@
 			if (openDeck !== null) await loadCards(openDeck);
 			await reloadDecks();
 			app.toast('Tarjeta movida', 'success');
-		} catch {
-			app.toast('No se pudo mover', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo mover');
 		}
 	}
 
@@ -311,8 +311,8 @@
 				dupGroups = null;
 				app.toast('No hay duplicados', 'success');
 			}
-		} catch {
-			app.toast('No se pudieron buscar duplicados', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudieron buscar duplicados');
 		}
 	}
 
@@ -339,7 +339,7 @@
 			}
 			app.toast(`Audio generado para ${audioJob.done} tarjetas`, 'success');
 		} catch (err) {
-			app.toast(err instanceof GeminiError ? err.message : 'Error al generar audio', 'error', { detail: `Se guardaron ${audioJob?.done ?? 0}. Puedes retomar: solo se generan las que faltan.` });
+			app.error(err, 'Error al generar audio', { detail: `Se guardaron ${audioJob?.done ?? 0}. Puedes retomar: solo se generan las que faltan.` });
 		} finally {
 			audioJob = null;
 			if (openDeck !== null) await loadCards(openDeck);
@@ -357,29 +357,45 @@
 			await reloadDecks();
 			globalNewPerDay = await getSetting('newPerDay');
 			audioEstimate = await averageCost('tts');
-		} catch {
-			app.toast('No se pudieron cargar los mazos', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudieron cargar los mazos');
 		}
 		const shared = takePending('mazos');
 		if (shared?.files[0]) importFile = shared.files[0];
 	});
 </script>
 
-<h1 class="mb-4 text-2xl font-bold">Mazos</h1>
+<div class="mb-3 flex items-center gap-2">
+	<h1 class="flex-1 text-2xl font-bold">Mazos</h1>
+	<Button onclick={() => (newDeckOpen = true)}>＋ Nuevo</Button>
+</div>
 
-<form class="mb-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onsubmit={(e) => (e.preventDefault(), addDeck())}>
-	<Field bind:value={newDeckName} placeholder="Nombre del mazo" />
-	<Field bind:value={newDeckDesc} placeholder="Descripción (opcional)" />
-	<Button type="submit">Crear</Button>
-</form>
-
-<div class="mb-6 flex flex-wrap gap-2">
-	<label class="bg-surface inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 px-4 text-sm font-medium transition select-none hover:bg-slate-50 active:scale-[.98]">
-		⇪ Importar (Anki .apkg, TSV, CSV)
+<div class="mb-4 flex flex-wrap gap-2">
+	<label
+		class="bg-surface inline-flex min-h-10 shrink-0 cursor-pointer items-center rounded-full border border-slate-300 px-4 text-sm font-medium whitespace-nowrap transition select-none hover:bg-slate-50 active:scale-[.98]"
+		title="Anki .apkg, TSV o CSV"
+	>
+		⇪ Importar
 		<input type="file" accept=".apkg,.tsv,.csv,.txt,text/csv,text/tab-separated-values" class="hidden" onchange={onImportPicked} />
 	</label>
-	<Button variant="secondary" onclick={findDups}>🔍 Buscar duplicados</Button>
+	<button
+		class="bg-surface inline-flex min-h-10 shrink-0 items-center rounded-full border border-slate-300 px-4 text-sm font-medium whitespace-nowrap transition hover:bg-slate-50 active:scale-[.98]"
+		onclick={findDups}>🔍 Duplicados</button
+	>
+	<a
+		href={`${base}/crear`}
+		class="bg-surface inline-flex min-h-10 shrink-0 items-center rounded-full border border-slate-300 px-4 text-sm font-medium whitespace-nowrap transition hover:bg-slate-50 active:scale-[.98]"
+		>✨ Crear con IA</a
+	>
 </div>
+
+<Sheet bind:open={newDeckOpen} title="Nuevo mazo">
+	<form class="grid gap-3" onsubmit={(e) => (e.preventDefault(), addDeck().then(() => (newDeckOpen = !!newDeckName.trim())))}>
+		<Field label="Nombre" bind:value={newDeckName} placeholder="Ej.: Manga, JLPT N4…" />
+		<Field label="Descripción (opcional)" bind:value={newDeckDesc} />
+		<Button type="submit" size="lg" full disabled={!newDeckName.trim()}>Crear mazo</Button>
+	</form>
+</Sheet>
 
 {#if audioJob}
 	<div class="mb-4 flex items-center gap-3 rounded-lg bg-sky-50 p-3 text-sm">
@@ -420,17 +436,22 @@
 
 			{#if openDeck === deck.id}
 				<div class="border-t border-slate-100 p-4">
-					<!-- Alta de tarjeta -->
-					<div class="mb-4 grid gap-2 sm:grid-cols-2">
-						<Field bind:value={form.front} placeholder="Frente (japonés, ej. 私[わたし])" class="sm:col-span-2" />
-						<Field bind:value={form.back} placeholder="Reverso (significado)" />
-						<Field bind:value={form.reading} placeholder="Lectura (kana)" />
-						<Field bind:value={form.context} placeholder="Contexto / frase (habilita «Completar frase»)" class="sm:col-span-2" />
-						<div class="flex items-center gap-3 sm:col-span-2">
-							<Button variant="success" onclick={addCard}>Añadir tarjeta</Button>
-							{#if form.front}<span class="text-lg"><Furigana text={form.front} /></span>{/if}
+					<!-- Alta de tarjeta (a mano; plegada para no ocupar la pantalla en el móvil) -->
+					<details class="mb-4 rounded-xl border border-slate-200">
+						<summary class="flex min-h-11 cursor-pointer list-none items-center px-3 text-sm font-medium text-slate-700 [&::-webkit-details-marker]:hidden"
+							>＋ Añadir tarjeta a mano</summary
+						>
+						<div class="grid gap-2 p-3 pt-0 sm:grid-cols-2">
+							<Field bind:value={form.front} placeholder="Frente (japonés, ej. 私[わたし])" class="sm:col-span-2" />
+							<Field bind:value={form.back} placeholder="Reverso (significado)" />
+							<Field bind:value={form.reading} placeholder="Lectura (kana)" />
+							<Field bind:value={form.context} placeholder="Contexto / frase (habilita «Completar frase»)" class="sm:col-span-2" />
+							<div class="flex items-center gap-3 sm:col-span-2">
+								<Button variant="success" onclick={addCard}>Añadir tarjeta</Button>
+								{#if form.front}<span class="text-lg"><Furigana text={form.front} /></span>{/if}
+							</div>
 						</div>
-					</div>
+					</details>
 
 					<!-- Filtros -->
 					<div class="mb-2 flex flex-wrap items-center gap-2">

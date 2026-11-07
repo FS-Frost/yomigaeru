@@ -29,9 +29,9 @@
 		const allText = [text, fileText].filter(Boolean).join('\n');
 		if (images.length)
 			a.push({
-				label: '📷 Crear tarjetas desde la imagen',
-				hint: images.length > 1 ? `Se usa la primera de ${images.length}.` : 'La IA detecta el japonés y propone tarjetas.',
-				run: () => go('foto', { files: [images[0]] }),
+				label: images.length > 1 ? `📷 Crear tarjetas desde ${images.length} imágenes` : '📷 Crear tarjetas desde la imagen',
+				hint: 'La IA detecta el japonés y propone tarjetas.',
+				run: () => go('crear', { files: images }),
 			});
 		if (allText && allText.length <= 40) a.push({ label: '＋ Crear una tarjeta', hint: `«${allText}»`, run: () => go('crear', { text: allText, files: [] }) });
 		if (allText && (allText.length > 40 || hasJapanese(allText)))

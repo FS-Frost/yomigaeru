@@ -1,5 +1,6 @@
 import { stripFurigana } from '$lib/furigana';
 import { generateJson, validate } from './client';
+import { retryOnBadOutput } from './cardgen';
 import { GrammarBreakdown, grammarGeminiSchema } from './schemas';
 
 export interface GrammarFocus {
@@ -28,9 +29,7 @@ Oración: "${clean}"${focusBlock}
 - "summary": traducción y sentido general en español.
 - "focusNote": explicación enfocada en la palabra que se está aprendiendo (deja vacío si no se indicó ninguna).
 - "tokens": divide la oración en fragmentos (partículas, verbos, sustantivos, etc.). Para cada uno: "surface" (el fragmento japonés), "role" (su función), "note" (explicación/matiz en español).
-Si aparece una palabra poco común, un nombre propio, jerga o un término reciente, verifica su lectura y uso con una búsqueda web antes de responder.
-Responde solo con el JSON.`;
+Sé breve y no repitas texto. Responde solo con el JSON.`;
 
-	const raw = await generateJson({ feature: 'grammar', prompt, schema: grammarGeminiSchema, useSearch: true });
-	return validate(GrammarBreakdown, raw);
+	return retryOnBadOutput(async () => validate(GrammarBreakdown, await generateJson({ feature: 'grammar', prompt, schema: grammarGeminiSchema, maxOutputTokens: 4096 })));
 }

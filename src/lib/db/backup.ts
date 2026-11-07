@@ -18,7 +18,7 @@ export const KIND_LABELS: Record<BackupKind, string> = {
 export async function exportBackup(light = false): Promise<Blob> {
 	return exportDB(db, {
 		prettyJson: false,
-		skipTables: light ? ['backups', 'images'] : ['backups'],
+		skipTables: light ? ['backups', 'drafts', 'images'] : ['backups', 'drafts'],
 		filter: (table, value) => !(table === 'settings' && (value as { key: string }).key === 'apiKey'),
 		transform: (table, value, key) => {
 			if (light && table === 'cards') {

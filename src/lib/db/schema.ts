@@ -146,6 +146,17 @@ export interface Setting {
 	value: unknown;
 }
 
+/**
+ * Sesión de «Crear» sin guardar (propuestas, fotos de la cola, mazo elegido), para recuperarla
+ * si se cierra la app. No viaja en los backups.
+ */
+export interface DraftRow {
+	id: string;
+	updatedAt: number;
+	/** Contenido serializable (grupos con blobs de imagen). */
+	data: unknown;
+}
+
 export type YomiDB = Dexie & {
 	decks: EntityTable<Deck, 'id'>;
 	cards: EntityTable<Card, 'id'>;
@@ -155,6 +166,7 @@ export type YomiDB = Dexie & {
 	backups: EntityTable<BackupRow, 'id'>;
 	geminiUsage: EntityTable<GeminiUsage, 'id'>;
 	settings: EntityTable<Setting, 'key'>;
+	drafts: EntityTable<DraftRow, 'id'>;
 };
 
 /** Tablas de datos del usuario (todas menos `backups`), en orden de restauración. */
@@ -209,6 +221,9 @@ export function applySchema(d: Dexie): YomiDB {
 
 	// v3: se elimina la tabla v1 una vez migrada (no se puede borrar en la misma versión que la lee).
 	d.version(3).stores({ fsrsData: null });
+
+	// v4: borradores de «Crear» (no forman parte de DATA_TABLES: no viajan en backups).
+	d.version(4).stores({ drafts: 'id, updatedAt' });
 	return d as YomiDB;
 }
 

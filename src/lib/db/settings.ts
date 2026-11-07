@@ -1,6 +1,8 @@
 import { db, type Facet } from './schema';
 
 export type AnswerStyle = 'reveal' | 'typed' | 'choice';
+/** De dónde sale la voz: del sistema (gratis, offline) o audio natural de Gemini (se guarda en la tarjeta). */
+export type VoiceSource = 'system' | 'gemini';
 
 /** Claves de configuración conocidas y su tipo. */
 export interface SettingsMap {
@@ -14,6 +16,10 @@ export interface SettingsMap {
 	/** Voz española para lecturas mixtas (explicaciones). */
 	ttsVoiceEsURI: string;
 	ttsRate: number;
+	/** Fuente de voz preferida (ver `VoiceSource`). */
+	voiceSource: VoiceSource;
+	/** Verificar lecturas con búsqueda web de Google (Gemini 3+; se cobra aparte). */
+	webSearch: boolean;
 	requestRetention: number;
 	/** Tarjetas (caras) nuevas por día. */
 	newPerDay: number;
@@ -33,12 +39,14 @@ export interface SettingsMap {
 
 export const DEFAULTS: SettingsMap = {
 	apiKey: '',
-	geminiModel: 'gemini-3-flash-preview',
-	ttsModel: 'gemini-2.5-flash-preview-tts',
+	geminiModel: 'gemini-3.8-flash',
+	ttsModel: 'gemini-3.8-flash-tts',
 	ttsGeminiVoice: 'Kore',
 	ttsVoiceURI: '',
 	ttsVoiceEsURI: '',
 	ttsRate: 0.95,
+	voiceSource: 'system',
+	webSearch: false,
 	requestRetention: 0.9,
 	newPerDay: 20,
 	answerStyle: 'reveal',

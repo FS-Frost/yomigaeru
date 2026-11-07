@@ -8,8 +8,20 @@ export interface Price {
 	cached?: number;
 }
 
-/** Precios por defecto aproximados por prefijo de modelo. Revisarlos contra la tabla oficial de Google y ajustarlos en Ajustes. */
+/**
+ * Precios por defecto (tier de pago estándar, tabla oficial al 2026-11-06) por prefijo de modelo.
+ * Google anunció subidas para algunos desde el 2026-12-01: se editan por modelo en Ajustes.
+ */
 export const DEFAULT_PRICES: Record<string, Price> = {
+	'gemini-4-argon': { input: 2, output: 10 },
+	'gemini-3.8-flash': { input: 0.75, output: 3.75 },
+	'gemini-3.8-flash-tts': { input: 0.5, output: 9 },
+	'gemini-3.8-flash-lite-tts': { input: 0.5, output: 6 },
+	'gemini-3.6-flash': { input: 0.75, output: 3.75 },
+	'gemini-3.5-flash-lite': { input: 0.3, output: 2.5 },
+	'gemini-3.1-pro': { input: 2, output: 12 },
+	'gemini-3.1-flash-lite': { input: 0.25, output: 1.5 },
+	'gemini-3.1-flash-tts': { input: 1, output: 20 },
 	'gemini-3-pro': { input: 2, output: 12 },
 	'gemini-3-flash': { input: 0.5, output: 3 },
 	'gemini-2.5-pro': { input: 1.25, output: 10 },

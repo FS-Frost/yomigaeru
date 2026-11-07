@@ -1,20 +1,16 @@
-import { generateJson, validate } from './client';
-import { GeneratedCard, cardGeminiSchema } from './schemas';
+import { generateJson, validate, type Stage } from './client';
+import { retryOnBadOutput } from './cardgen';
+import { GeminiError } from './errors';
+import { CARD_LOOP, wordPrompt } from './request';
+import { cardGeminiSchema, cardProblem, GeneratedCard } from './schemas';
 
 /** Genera una tarjeta completa a partir de una palabra/frase japonesa o en español. */
-export async function generateCardFromText(input: string): Promise<GeneratedCard> {
-	const prompt = `Eres un profesor de japonés. A partir de la entrada del alumno, crea UNA tarjeta de estudio.
-Entrada: "${input}"
-
-Reglas:
-- "front": la palabra o frase en japonés con furigana en notación Anki (kanji seguido de su lectura entre corchetes, ej: 私[わたし]は 学生[がくせい]). Solo pon furigana sobre kanji.
-- "reading": lectura completa en hiragana.
-- "back": significado claro y conciso en español.
-- "context": una breve nota de uso o gramática en español.
-- "examples": 1 a 2 oraciones de ejemplo (jp con furigana, es traducción).
-Si la palabra es poco común, un nombre propio, jerga o un término reciente, verifica su lectura y uso con una búsqueda web antes de responder.
-Responde solo con el JSON.`;
-
-	const raw = await generateJson({ feature: 'generateCard', prompt, schema: cardGeminiSchema, useSearch: true });
-	return validate(GeneratedCard, raw);
+export async function generateCardFromText(input: string, opts: { signal?: AbortSignal; onStage?: (s: Stage) => void } = {}): Promise<GeneratedCard> {
+	return retryOnBadOutput(async (attempt) => {
+		const raw = await generateJson({ feature: 'generateCard', prompt: wordPrompt(input, attempt), schema: cardGeminiSchema, maxOutputTokens: 4096, loop: CARD_LOOP, ...opts });
+		const card = validate(GeneratedCard, raw);
+		const problem = cardProblem(card);
+		if (problem) throw new GeminiError(null, { code: 'invalid', detail: `Tarjeta descartada: ${problem}` });
+		return card;
+	});
 }

@@ -3,12 +3,12 @@
 	import { base } from '$app/paths';
 
 	// `mobile: false` = solo en la barra de escritorio (en móvil se llega desde Inicio).
+	// En móvil, «Crear» va al centro: es la acción principal junto a estudiar.
 	const links = [
 		{ href: '/', icon: '蘇', label: 'Inicio', mobile: true },
 		{ href: '/estudio', icon: '本', label: 'Estudio', mobile: true },
-		{ href: '/mazos', icon: '⊞', label: 'Mazos', mobile: true },
 		{ href: '/crear', icon: '＋', label: 'Crear', mobile: true },
-		{ href: '/foto', icon: '📷', label: 'Foto', mobile: true },
+		{ href: '/mazos', icon: '⊞', label: 'Mazos', mobile: true },
 		{ href: '/estadisticas', icon: '📊', label: 'Estadísticas', mobile: false },
 		{ href: '/ajustes', icon: '⚙', label: 'Ajustes', mobile: true },
 	];
@@ -16,6 +16,7 @@
 
 	function isActive(href: string): boolean {
 		const path = page.url.pathname.slice(base.length) || '/';
+		if (href === '/crear' && path.startsWith('/foto')) return true;
 		return href === '/' ? path === '/' : path.startsWith(href);
 	}
 
@@ -30,6 +31,7 @@
 		{#each links as link (link.href)}
 			<a
 				href={url(link.href)}
+				aria-current={isActive(link.href) ? 'page' : undefined}
 				class="rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition {isActive(link.href) ? 'bg-brand text-brand-fg' : 'text-slate-600 hover:bg-slate-100'}"
 			>
 				{link.icon}
@@ -39,18 +41,17 @@
 	</div>
 </nav>
 
-<!-- Móvil: bottom tab bar fija -->
-<nav class="pb-safe bg-surface/95 fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 backdrop-blur sm:hidden">
-	<div class="mx-auto grid max-w-3xl grid-cols-6">
+<!-- Móvil: barra inferior fija de 5 pestañas -->
+<nav class="pb-safe bg-surface/95 fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 backdrop-blur sm:hidden" aria-label="Navegación">
+	<div class="mx-auto grid max-w-3xl grid-cols-5">
 		{#each mobileLinks as link (link.href)}
+			{@const active = isActive(link.href)}
 			<a
 				href={url(link.href)}
-				aria-current={isActive(link.href) ? 'page' : undefined}
-				class="flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[0.65rem] font-medium transition {isActive(link.href)
-					? 'text-slate-900'
-					: 'text-slate-400 hover:text-slate-600'}"
+				aria-current={active ? 'page' : undefined}
+				class="flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-1.5 text-[0.7rem] font-medium transition {active ? 'text-slate-900' : 'text-slate-500 active:text-slate-700'}"
 			>
-				<span class="text-lg leading-none">{link.icon}</span>
+				<span class="flex h-7 w-12 items-center justify-center rounded-full text-lg leading-none transition {active ? 'bg-brand text-brand-fg' : ''}">{link.icon}</span>
 				<span class="leading-none">{link.label}</span>
 			</a>
 		{/each}

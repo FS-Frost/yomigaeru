@@ -23,8 +23,8 @@
 	import { judgeAnswer } from '$lib/gemini/judge';
 	import { synthesizeJapanese } from '$lib/gemini/tts';
 	import type { GrammarBreakdown, Judgement } from '$lib/gemini/schemas';
-	import { GeminiError } from '$lib/gemini/client';
 	import { app } from '$lib/state/app.svelte';
+	import { net } from '$lib/net.svelte';
 
 	// --- Sesión ---
 	let queue = $state<DueItem[]>([]);
@@ -90,8 +90,8 @@
 			index = 0;
 			pool = await db.cards.toArray();
 			prepare();
-		} catch {
-			app.toast('No se pudieron cargar las tarjetas', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudieron cargar las tarjetas');
 		} finally {
 			loading = false;
 		}
@@ -121,16 +121,24 @@
 		}
 		try {
 			await setSetting('answerStyle', s);
-		} catch {
-			app.toast('No se pudo guardar el modo de respuesta', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo guardar el modo de respuesta');
 		}
 	}
+
+	// Alto de la barra de acción fija: los avisos se colocan encima (variable --action-bar del Toaster).
+	let barH = $state(0);
+	$effect(() => {
+		const root = document.documentElement;
+		root.style.setProperty('--action-bar', window.matchMedia('(max-width: 639px)').matches ? `${barH + 12}px` : '0px');
+		return () => root.style.removeProperty('--action-bar');
+	});
 
 	// --- Responder ---
 
 	function finishQuestion() {
 		phase = 'answered';
-		if (card) void speakJapanese(card.front, card.audioBlob);
+		speakCard();
 		grammar = card?.grammar ?? null;
 		grammarSaved = true;
 	}
@@ -168,7 +176,7 @@
 				correct = j.verdict !== 'wrong';
 				suggested = (['again', 'hard', 'good', 'easy'] as RatingKey[])[j.suggestedRating - 1] ?? null;
 			} catch (err) {
-				app.toast(err instanceof GeminiError ? err.message : 'El juez no respondió', 'error', { detail: 'Se corrige sin IA.' });
+				app.error(err, 'El juez no respondió', { detail: 'Se corrige sin IA.' });
 				correct = false;
 				suggested = 'again';
 			}
@@ -209,8 +217,8 @@
 				await db.schedules.put(next);
 				return (await db.reviewLogs.add(log)) as number;
 			});
-		} catch {
-			app.toast('No se pudo guardar el repaso. Revisa el almacenamiento del navegador.', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo guardar el repaso. Revisa el almacenamiento del navegador.');
 			return;
 		}
 		// Pasos de aprendizaje cortos: vuelve a salir en esta misma sesión.
@@ -232,8 +240,8 @@
 				await db.schedules.put(u.prev);
 				await db.reviewLogs.delete(u.logId);
 			});
-		} catch {
-			app.toast('No se pudo deshacer', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo deshacer');
 			return;
 		}
 		if (u.requeued) queue.pop();
@@ -268,8 +276,8 @@
 			await pauseCard(c.id!, PAUSE_DAYS);
 			dropFromSession(c.id!);
 			app.toast(`Pausada ${PAUSE_DAYS} días`, 'success');
-		} catch {
-			app.toast('No se pudo pausar', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo pausar');
 		}
 	}
 
@@ -278,8 +286,8 @@
 			await setSuspended(c.id!, true);
 			dropFromSession(c.id!);
 			app.toast('Tarjeta suspendida', 'success', { action: { label: 'Deshacer', run: () => void setSuspended(c.id!, false) } });
-		} catch {
-			app.toast('No se pudo suspender', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo suspender');
 		}
 	}
 
@@ -292,7 +300,7 @@
 			grammar = await explainGrammar(card.context || card.front, { word: card.front, reading: card.reading, meaning: card.back });
 			grammarSaved = false;
 		} catch (err) {
-			app.toast(err instanceof GeminiError ? err.message : 'Error', 'error', { action: { label: 'Reintentar', run: () => void generateGrammar() } });
+			app.error(err, 'No se pudo explicar la gramática', { retry: () => void generateGrammar() });
 		} finally {
 			grammarLoading = false;
 		}
@@ -304,8 +312,8 @@
 		const g = $state.snapshot(grammar) as GrammarBreakdown;
 		try {
 			await updateCard(card.id, { grammar: g, grammarSavedAt: savedAt });
-		} catch {
-			app.toast('No se pudo guardar la explicación', 'error');
+		} catch (e) {
+			app.error(e, 'No se pudo guardar la explicación');
 			return;
 		}
 		card.grammar = g;
@@ -320,20 +328,33 @@
 
 	// --- Audio natural (Gemini TTS) ---
 
-	async function generateAudio() {
+	/** Genera el audio natural y lo guarda en la tarjeta. `auto`: al sonar sola, sin avisos de éxito y con la voz del sistema si falla. */
+	async function generateAudio(auto = false) {
 		if (!card?.id) return;
+		const target = card;
 		audioLoading = true;
 		try {
-			const blob = await synthesizeJapanese(card.front);
-			await updateCard(card.id, { audioBlob: blob });
-			card.audioBlob = blob;
-			void speakJapanese(card.front, blob);
-			app.toast('Audio guardado en la tarjeta', 'success');
+			const blob = await synthesizeJapanese(target.front);
+			await updateCard(target.id!, { audioBlob: blob });
+			target.audioBlob = blob;
+			if (card === target) void speakJapanese(target.front, blob);
+			if (!auto) app.toast('Audio guardado en la tarjeta', 'success');
 		} catch (err) {
-			app.toast(err instanceof GeminiError ? err.message : 'No se pudo generar el audio', 'error');
+			if (auto) {
+				void speakJapanese(target.front);
+				app.toast('No se pudo generar el audio natural; se usa la voz del sistema.', 'warn', { key: 'tts-fallback' });
+			} else app.error(err, 'No se pudo generar el audio', { retry: () => void generateAudio() });
 		} finally {
 			audioLoading = false;
 		}
+	}
+
+	/** Pronuncia la tarjeta: audio guardado; si no hay y la fuente es «Voz natural IA», lo genera; si no, voz del sistema. */
+	function speakCard() {
+		if (!card) return;
+		if (card.audioBlob) return void speakJapanese(card.front, card.audioBlob);
+		if (app.settings?.voiceSource === 'gemini' && app.settings.apiKey && net.online && !audioLoading) return void generateAudio(true);
+		void speakJapanese(card.front);
 	}
 
 	// --- Atajos de teclado ---
@@ -426,7 +447,7 @@
 		<div class="bg-surface relative rounded-2xl border border-slate-200 shadow-sm">
 			<div class="absolute top-2 right-2 z-10 flex">
 				{#if facet !== 'production' || phase === 'answered'}
-					<IconButton label="Escuchar" onclick={() => speakJapanese(card.front, card.audioBlob)}>♪</IconButton>
+					<IconButton label="Escuchar" onclick={speakCard}>♪</IconButton>
 				{/if}
 				<IconButton label="Pausar o suspender" onclick={() => leechWarning(card)}>⏸</IconButton>
 			</div>
@@ -498,7 +519,7 @@
 								<Button variant="ghost" loading={grammarLoading} onclick={generateGrammar}>📖 Explicar gramática</Button>
 							{/if}
 							{#if !card.audioBlob}
-								<Button variant="ghost" loading={audioLoading} onclick={generateAudio}>🔊 Audio natural</Button>
+								<Button variant="ghost" loading={audioLoading} onclick={() => generateAudio()}>🔊 Audio natural</Button>
 							{/if}
 						{/if}
 					</div>
@@ -529,7 +550,7 @@
 
 	<!-- Zona de acción fija al alcance del pulgar -->
 	<div class="bottom-nav pointer-events-none fixed inset-x-0 z-30 px-4 sm:static sm:mt-5 sm:px-0">
-		<div class="pointer-events-auto mx-auto max-w-3xl rounded-xl bg-slate-50/90 backdrop-blur sm:bg-transparent">
+		<div bind:clientHeight={barH} class="pointer-events-auto mx-auto max-w-3xl rounded-xl bg-slate-50/90 backdrop-blur sm:bg-transparent">
 			{#if phase === 'question' && mode === 'reveal'}
 				<Button size="lg" full onclick={reveal}>Mostrar respuesta <kbd class="ml-2 hidden text-xs opacity-60 sm:inline">Espacio</kbd></Button>
 			{:else if phase === 'question' && mode === 'choice' && options}
