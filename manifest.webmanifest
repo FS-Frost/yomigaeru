@@ -17,8 +17,8 @@
 	],
 	"shortcuts": [
 		{ "name": "Estudiar", "short_name": "Estudiar", "description": "Repasos y nuevas de hoy", "url": "estudio", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-		{ "name": "Foto a tarjetas", "short_name": "Foto", "description": "Crear tarjetas desde una imagen", "url": "foto", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-		{ "name": "Crear tarjeta", "short_name": "Crear", "description": "Crear tarjetas desde texto", "url": "crear", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+		{ "name": "Foto a tarjetas", "short_name": "Foto", "description": "Crear tarjetas desde una foto", "url": "crear?camara=1", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+		{ "name": "Crear tarjeta", "short_name": "Crear", "description": "Crear tarjetas desde una palabra o un texto", "url": "crear", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
 	],
 	"share_target": {
 		"action": "compartir",
@@ -40,6 +40,7 @@
 		{
 			"action": "compartir",
 			"accept": {
+				"image/*": [".png", ".jpg", ".jpeg", ".webp"],
 				"application/json": [".json"],
 				"text/tab-separated-values": [".tsv"],
 				"text/csv": [".csv"],

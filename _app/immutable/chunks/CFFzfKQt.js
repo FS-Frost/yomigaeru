@@ -1,0 +1,1 @@
+import{$ as e,V as t,et as n}from"./BkHRe4lE.js";var r=new class{#e=n(!0);get online(){return t(this.#e)}set online(t){e(this.#e,t,!0)}started=!1;init(){this.started||typeof window>`u`||(this.started=!0,this.online=navigator.onLine,window.addEventListener(`online`,()=>this.online=!0),window.addEventListener(`offline`,()=>this.online=!1))}};export{r as t};
