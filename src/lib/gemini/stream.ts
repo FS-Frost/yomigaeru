@@ -141,6 +141,17 @@ export function extractCompleteItems(text: string, key: string): unknown[] {
 	return out;
 }
 
+/** Valor de un campo string (`"key": "…"`) ya cerrado dentro de un JSON a medio llegar; `null` si aún no está. */
+export function extractString(text: string, key: string): string | null {
+	const m = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`).exec(text);
+	if (!m) return null;
+	try {
+		return JSON.parse(`"${m[1]}"`) as string;
+	} catch {
+		return null;
+	}
+}
+
 export interface LoopCheck {
 	/** Largo máximo de un valor string antes de considerarlo un bucle. */
 	maxString?: number;

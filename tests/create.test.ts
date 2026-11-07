@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { addUnique, detectMode, keptCount, orderedProposals, setAllKept } from '$lib/create';
+import { addUnique, detectMode, keptCount, orderedProposals, setAllKept, topicDeckName } from '$lib/create';
 import type { Proposal } from '$lib/proposals';
 
 test.each([
@@ -9,7 +9,18 @@ test.each([
 	['見当がつかない', 'word'],
 	['  猫  ', 'word'],
 	['', 'word'],
-	['¿cómo se dice gato?', 'word'], // sin japonés: siempre una tarjeta
+	// Español: 1 tarjeta salvo 3+ palabras o una pista de tema.
+	['buenos días', 'word'],
+	['tener hambre', 'word'],
+	['cocina japonesa', 'word'],
+	['anime persona 5', 'topic'],
+	['ir al médico', 'topic'],
+	['vocabulario de cocina', 'topic'],
+	['sobre trenes', 'topic'],
+	['anime', 'topic'],
+	['película', 'topic'],
+	['sobremesa', 'word'], // «sobre» solo como palabra completa
+	['¿cómo se dice gato?', 'topic'], // 4 palabras: el interruptor lo cambia a 1 tarjeta
 	['猫が好きです。', 'text'],
 	['本当？', 'text'],
 	['猫\n犬', 'text'],
@@ -53,4 +64,14 @@ test('orderedProposals pone duplicadas al final conservando el índice', () => {
 	const ps = [prop('a', true), prop('b'), prop('c', true), prop('d')];
 	expect(orderedProposals(ps, true).map((x) => x.i)).toEqual([1, 3, 0, 2]);
 	expect(orderedProposals(ps, false).map((x) => x.i)).toEqual([0, 1, 2, 3]);
+});
+
+test.each([
+	['Persona 5', 'anime persona 5', 'Persona 5'],
+	[undefined, 'vocabulario de cocina japonesa', 'Cocina japonesa'],
+	['  ', 'sobre trenes', 'Sobre trenes'],
+	[undefined, '', 'Generadas por IA'],
+	['un nombre larguísimo que no cabe en un mazo de ninguna manera', 'x', 'Un nombre larguísimo que no cabe en un m'],
+])('topicDeckName(%p, %p) → %p', (suggested, topic, expected) => {
+	expect(topicDeckName(suggested, topic)).toBe(expected);
 });

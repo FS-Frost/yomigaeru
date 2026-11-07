@@ -11,7 +11,8 @@ await import('fake-indexeddb/auto');
 const { db } = await import('$lib/db/schema');
 const { setSetting } = await import('$lib/db/settings');
 const { geminiClient } = await import('$lib/gemini/client');
-const { textToCards, imageToCards } = await import('$lib/gemini/imageToCards');
+const { textToCards, imageToCards, topicToCards } = await import('$lib/gemini/imageToCards');
+const { stripFurigana } = await import('$lib/furigana');
 const { generateCardFromText } = await import('$lib/gemini/generateCard');
 const { judgeAnswer } = await import('$lib/gemini/judge');
 const { explainGrammar } = await import('$lib/gemini/grammar');
@@ -90,6 +91,19 @@ for (let i = 0; i < runs; i++) {
 			if (!r.cards.length) throw new Error('0 tarjetas');
 			return `${r.cards.length} tarjetas (${live} en vivo)${r.retried ? ', CON REINTENTO' : ''}${r.dropped.length ? `, ${r.dropped.length} descartadas: ${r.dropped.join(' | ')}` : ''}${r.warning ? `, aviso ${r.warning.code}` : ''} · ${r.cards
 				.slice(0, 3)
+				.map((c) => `${c.front}=${c.back}`)
+				.join('; ')}`;
+		});
+	if (want('topic'))
+		await measure('topic', async () => {
+			const count = Number(opt('count') ?? 10);
+			const r = await topicToCards(opt('topic') ?? 'anime persona 5', { count, level: 'intermediate', exclude: ['猫', '犬', '学校'] });
+			if (!r.cards.length) throw new Error('0 tarjetas');
+			// La cara «Completar frase» necesita que el contexto contenga la palabra.
+			const withCtx = r.cards.filter((c) => stripFurigana(c.context).includes(stripFurigana(c.front))).length;
+			const excluded = r.cards.filter((c) => ['猫', '犬', '学校'].includes(stripFurigana(c.front))).length;
+			return `mazo «${r.deckName}» · ${r.cards.length}/${count} tarjetas, ${withCtx} con la palabra en el contexto, ${excluded} excluidas que se colaron${r.retried ? ', CON REINTENTO' : ''}${r.dropped.length ? `, ${r.dropped.length} descartadas` : ''} · ${r.cards
+				.slice(0, 4)
 				.map((c) => `${c.front}=${c.back}`)
 				.join('; ')}`;
 		});

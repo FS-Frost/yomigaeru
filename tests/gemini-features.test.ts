@@ -7,7 +7,8 @@ import { setSetting } from '$lib/db/settings';
 import { _setTestClient } from '$lib/gemini/client';
 import { generateCardFromText } from '$lib/gemini/generateCard';
 import { explainGrammar } from '$lib/gemini/grammar';
-import { imageToCards, textToCards } from '$lib/gemini/imageToCards';
+import { imageToCards, textToCards, topicToCards } from '$lib/gemini/imageToCards';
+import { recentFronts } from '$lib/db/cards';
 import { judgeAnswer } from '$lib/gemini/judge';
 import { synthesizeJapanese } from '$lib/gemini/tts';
 
@@ -196,4 +197,44 @@ test('la API key nunca aparece en errores', async () => {
 	replies = [Object.assign(new Error('bad https://x?key=AIzaSyA1234567890abcdefghijklmnop'), { status: 400 })];
 	const e = await textToCards('x').catch((x) => x);
 	expect(JSON.stringify({ m: e.message, d: e.detail })).not.toContain('AIzaSyA1234567890abcdefghijklmnop');
+});
+
+describe('topicToCards', () => {
+	const ctx = (front: string) => ({ ...card(front), context: `今日[きょう]は${front}の話[はなし]。` });
+
+	test('sugiere el mazo en vivo, pide la cantidad y el nivel y excluye lo que ya sabes', async () => {
+		replies = [JSON.stringify({ deckName: 'Persona 5', cards: [ctx('怪盗[かいとう]'), ctx('心[こころ]')] })];
+		const names: string[] = [];
+		const r = await topicToCards('anime persona 5', { count: 10, level: 'beginner', exclude: ['猫', '犬'], onDeckName: (n) => names.push(n) });
+		expect(r.deckName).toBe('Persona 5');
+		expect(names[0]).toBe('Persona 5');
+		expect(r.cards.map((c) => c.front)).toEqual(['怪盗[かいとう]', '心[こころ]']);
+		const prompt = requests[0].contents[0].parts[0].text!;
+		expect(prompt).toContain('anime persona 5');
+		expect(prompt).toContain('exactamente 10 tarjetas');
+		expect(prompt).toContain('principiante');
+		expect(prompt).toContain('猫、犬');
+		const schema = requests[0].config.responseSchema as { propertyOrdering: string[]; properties: { cards: { maxItems: string } } };
+		expect(schema.propertyOrdering).toEqual(['deckName', 'cards']); // el nombre llega primero
+		expect(schema.properties.cards.maxItems).toBe('20');
+		expect(requests[0].config.maxOutputTokens).toBe(8192);
+		expect((await db.geminiUsage.toArray()).at(-1)?.feature).toBe('topicToCards');
+	});
+
+	test('20 tarjetas suben el tope de salida', async () => {
+		replies = [JSON.stringify({ deckName: 'Cocina', cards: [ctx('料理[りょうり]')] })];
+		await topicToCards('vocabulario de cocina', { count: 20, level: 'advanced' });
+		expect(requests[0].config.maxOutputTokens).toBe(12000);
+	});
+});
+
+test('recentFronts: frentes recientes sin furigana ni repetidos', async () => {
+	await db.cards.clear();
+	await db.cards.bulkAdd([
+		{ deckId: 1, front: '猫[ねこ]', back: 'gato', createdAt: 1, norm: '猫' },
+		{ deckId: 1, front: '犬[いぬ]', back: 'perro', createdAt: 3, norm: '犬' },
+		{ deckId: 1, front: '猫', back: 'gato', createdAt: 2, norm: '猫' },
+	]);
+	expect(await recentFronts(10)).toEqual(['犬', '猫']);
+	expect(await recentFronts(1)).toEqual(['犬']);
 });

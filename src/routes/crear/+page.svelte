@@ -5,11 +5,13 @@
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
-	import { listDecks, createDeck } from '$lib/db/decks';
+	import { listDecks, ensureDeckByName } from '$lib/db/decks';
+	import { recentFronts } from '$lib/db/cards';
+	import { stripFurigana } from '$lib/furigana';
 	import type { Deck } from '$lib/db/schema';
 	import { clearDraft, loadDraft, saveDraft, type CreateDraft } from '$lib/db/drafts';
 	import { generateCardFromText } from '$lib/gemini/generateCard';
-	import { imageToCards, textToCards } from '$lib/gemini/imageToCards';
+	import { imageToCards, textToCards, topicToCards } from '$lib/gemini/imageToCards';
 	import type { CardsResult } from '$lib/gemini/cardgen';
 	import type { Stage } from '$lib/gemini/stream';
 	import type { GeneratedCard } from '$lib/gemini/schemas';
@@ -18,7 +20,23 @@
 	import { takePending } from '$lib/inbox';
 	import { compressImage, imageFromPaste } from '$lib/media/image';
 	import { refreshDups, saveProposals, toProposals, type Proposal } from '$lib/proposals';
-	import { addUnique, detectMode, groupId, keptCount, MAX_PHOTOS, setAllKept, type CreateGroup, type CreateMode } from '$lib/create';
+	import {
+		addUnique,
+		detectMode,
+		groupId,
+		keptCount,
+		MAX_PHOTOS,
+		setAllKept,
+		TOPIC_COUNTS,
+		TOPIC_DEFAULTS,
+		TOPIC_EXCLUDE_MAX,
+		TOPIC_LEVELS,
+		topicDeckName,
+		type CreateGroup,
+		type CreateMode,
+		type TopicLevel,
+		type TopicOptions,
+	} from '$lib/create';
 	import { app } from '$lib/state/app.svelte';
 	import { net } from '$lib/net.svelte';
 	import Button from '$lib/gui/Button.svelte';
@@ -50,6 +68,11 @@
 	let groups = $state<CreateGroup[]>([]);
 	let decks = $state<Deck[]>([]);
 	let deckId = $state<number | null>(null);
+	/** Nombre del mazo nuevo (si `deckId` es null). Un tema sugiere el suyo mientras no se elija otro a mano. */
+	let newDeckName = $state('Generadas por IA');
+	let deckTouched = false;
+	// Opciones del modo Tema.
+	let topicOpts = $state<TopicOptions>({ ...TOPIC_DEFAULTS });
 	let hideDups = $state(false);
 	let saving = $state(false);
 
@@ -57,7 +80,7 @@
 	type Run = { stage: Stage; startedAt: number; count: number; retrying: boolean; step: { i: number; n: number } | null; label: string; estimate: number | null };
 	let running = $state<Run | null>(null);
 	let controller: AbortController | null = null;
-	let costs = $state<Record<'word' | 'text' | 'image', number | null>>({ word: null, text: null, image: null });
+	let costs = $state<Record<'word' | 'text' | 'topic' | 'image', number | null>>({ word: null, text: null, topic: null, image: null });
 
 	// --- Borrador ---
 	let draftOffer = $state<(CreateDraft & { updatedAt: number }) | null>(null);
@@ -88,7 +111,7 @@
 		try {
 			decks = await listDecks();
 			deckId = decks[0]?.id ?? null;
-			[costs.word, costs.text, costs.image] = await Promise.all([averageCost('generateCard'), averageCost('textToCards'), averageCost('imageToCards')]);
+			[costs.word, costs.text, costs.topic, costs.image] = await Promise.all([averageCost('generateCard'), averageCost('textToCards'), averageCost('topicToCards'), averageCost('imageToCards')]);
 		} catch (e) {
 			app.error(e, 'No se pudieron cargar los mazos');
 		}
@@ -115,7 +138,7 @@
 	// Guardado del borrador (con retardo) cada vez que cambian las propuestas.
 	let draftTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
-		const snap = { text, mode: modeOverride, deckId, groups: $state.snapshot(groups) as CreateGroup[] };
+		const snap = { text, mode: modeOverride, deckId, newDeckName, groups: $state.snapshot(groups) as CreateGroup[] };
 		if (!draftReady || draftOffer) return;
 		clearTimeout(draftTimer);
 		draftTimer = setTimeout(() => saveDraft(snap).catch((e) => app.error(e, 'No se pudo guardar el borrador')), 600);
@@ -129,6 +152,10 @@
 		if (!text) text = d.text;
 		if (d.mode) modeOverride = d.mode;
 		if (d.deckId != null && decks.some((x) => x.id === d.deckId)) deckId = d.deckId;
+		else if (d.deckId == null && d.newDeckName) {
+			deckId = null;
+			newDeckName = d.newDeckName;
+		}
 		draftOffer = null;
 	}
 	async function discardDraft() {
@@ -249,7 +276,7 @@
 				await runGroup(groups[0], { i: i + 1, n: photos.length });
 			}
 			if (input && !controller.signal.aborted) {
-				const g: CreateGroup = { id: groupId(), kind: inputMode, text: input, status: 'running', proposals: [] };
+				const g: CreateGroup = { id: groupId(), kind: inputMode, text: input, status: 'running', proposals: [], ...(inputMode === 'topic' ? { topic: { ...topicOpts } } : {}) };
 				groups.unshift(g);
 				await runGroup(groups[0]);
 			}
@@ -259,8 +286,24 @@
 		}
 	}
 
-	/** Ejecuta (o reejecuta) un grupo. `instruction` = refinado de lo que ya propuso. */
-	async function runGroup(g: CreateGroup, step: Run['step'] = null, instruction?: string) {
+	/** El tema sugirió un nombre de mazo: se propone (o se elige el existente) si no se cambió a mano. */
+	function suggestDeck(g: CreateGroup, suggested: string) {
+		g.deckName = topicDeckName(suggested, g.text ?? '');
+		if (deckTouched) return;
+		const existing = decks.find((d) => d.name.toLowerCase() === g.deckName!.toLowerCase());
+		deckId = existing?.id ?? null;
+		if (!existing) newDeckName = g.deckName;
+	}
+
+	/** Frentes que la IA no debe repetir: tus tarjetas recientes + lo ya propuesto. */
+	async function excludeList(): Promise<string[]> {
+		const own = await recentFronts(TOPIC_EXCLUDE_MAX).catch(() => []);
+		const proposed = groups.flatMap((x) => x.proposals.map((p) => stripFurigana(p.front)));
+		return [...new Set([...proposed, ...own])].slice(0, TOPIC_EXCLUDE_MAX + 100);
+	}
+
+	/** Ejecuta (o reejecuta) un grupo. `instruction` = refinado; `more` = tema: añadir tarjetas nuevas sin borrar. */
+	async function runGroup(g: CreateGroup, step: Run['step'] = null, instruction?: string, more = false) {
 		const own = !controller;
 		if (own) controller = new AbortController();
 		g.status = 'running';
@@ -273,6 +316,13 @@
 				startRun('Creando la tarjeta', costs.word);
 				const c = await generateCardFromText(g.text!, { signal: h.signal, onStage: h.onStage });
 				g.proposals = await toProposals([c]);
+			} else if (g.kind === 'topic') {
+				const opts = g.topic ?? TOPIC_DEFAULTS;
+				startRun(more ? 'Buscando más palabras del tema' : `Creando ${opts.count} tarjetas del tema`, costs.topic);
+				const r = await topicToCards(g.text!, { ...h, ...opts, exclude: await excludeList(), onDeckName: (n) => suggestDeck(g, n) });
+				await h.done();
+				if (r.deckName) suggestDeck(g, r.deckName);
+				report(r, g);
 			} else if (g.kind === 'text') {
 				startRun(instruction ? 'Ajustando las tarjetas' : 'Eligiendo palabras del texto', costs.text);
 				const r = await textToCards(g.text!, { ...h, instruction, previous });
@@ -306,6 +356,12 @@
 		await runGroup(g, null, instruction);
 	}
 
+	/** Tema: pedir más tarjetas, excluyendo las ya propuestas y las que ya tienes. */
+	async function moreOf(g: CreateGroup) {
+		if (running) return;
+		await runGroup(g, null, undefined, true);
+	}
+
 	function cancel() {
 		controller?.abort();
 	}
@@ -326,7 +382,7 @@
 	// --- Guardar ---
 	async function ensureDeck(): Promise<number> {
 		if (deckId !== null) return deckId;
-		const id = await createDeck('Generadas por IA');
+		const id = await ensureDeckByName(newDeckName.trim() || 'Generadas por IA');
 		decks = await listDecks();
 		deckId = id;
 		return id;
@@ -350,6 +406,8 @@
 				groups = [];
 				await clearDraft();
 			}
+			// El próximo tema vuelve a sugerir su propio mazo.
+			deckTouched = false;
 			const deck = decks.find((d) => d.id === target);
 			app.toast(`${created} ${created === 1 ? 'tarjeta guardada' : 'tarjetas guardadas'}${merged ? ` · ${merged} fusionadas` : ''}${deck ? ` en «${deck.name}»` : ''}`, 'success', {
 				action: { label: 'Estudiar', run: () => void goto(`${base}/estudio?mazo=${target}`) },
@@ -376,7 +434,7 @@
 	});
 
 	const estimate = $derived.by(() => {
-		const parts = [queue.length ? (costs.image ?? 0) * queue.length : 0, text.trim() ? ((mode === 'word' ? costs.word : costs.text) ?? 0) : 0];
+		const parts = [queue.length ? (costs.image ?? 0) * queue.length : 0, text.trim() ? ((mode === 'word' ? costs.word : mode === 'topic' ? costs.topic : costs.text) ?? 0) : 0];
 		const sum = parts.reduce((a, b) => a + b, 0);
 		return sum > 0 ? sum : null;
 	});
@@ -413,10 +471,10 @@
 		bind:this={textarea}
 		bind:value={text}
 		rows="2"
-		placeholder="Escribe una palabra (猫, perro) o pega un texto en japonés…"
+		placeholder="Una palabra (猫, perro), un tema (anime persona 5) o un texto en japonés…"
 		class="block max-h-[40vh] min-h-14 w-full resize-none bg-transparent px-1 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none"
 		onkeydown={(e) => {
-			if (e.key === 'Enter' && (e.ctrlKey || e.metaKey || mode === 'word') && !e.shiftKey) {
+			if (e.key === 'Enter' && (e.ctrlKey || e.metaKey || mode !== 'text') && !e.shiftKey) {
 				e.preventDefault();
 				void generate();
 			}
@@ -449,10 +507,9 @@
 	</div>
 
 	{#if text.trim()}
-		<div class="mt-2 flex items-center gap-2 text-sm">
-			<span class="text-slate-500">Crear</span>
-			<div class="flex rounded-full border border-slate-300 p-0.5" role="radiogroup" aria-label="Cuántas tarjetas">
-				{#each [['word', '1 tarjeta'], ['text', 'Varias']] as [v, label] (v)}
+		<div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+			<div class="flex rounded-full border border-slate-300 p-0.5" role="radiogroup" aria-label="Qué crear">
+				{#each [['word', '1 tarjeta'], ['text', 'Varias'], ['topic', 'Tema']] as [v, label] (v)}
 					<button
 						role="radio"
 						aria-checked={mode === v}
@@ -463,6 +520,33 @@
 			</div>
 			{#if !modeOverride}<span class="text-xs text-slate-400">detectado</span>{/if}
 		</div>
+		<p class="mt-1 px-1 text-xs text-slate-500">
+			{#if mode === 'word'}Una tarjeta con su significado y ejemplos.
+			{:else if mode === 'text'}Elige las palabras útiles de este texto japonés.
+			{:else}Vocabulario de este tema con una frase de ejemplo; evita las palabras que ya tienes.{/if}
+		</p>
+		{#if mode === 'topic'}
+			<div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+				<div class="flex rounded-full border border-slate-300 p-0.5" role="radiogroup" aria-label="Cantidad">
+					{#each TOPIC_COUNTS as n (n)}
+						<button
+							role="radio"
+							aria-checked={topicOpts.count === n}
+							class="min-h-9 min-w-11 rounded-full px-3 font-medium transition {topicOpts.count === n ? 'bg-brand text-brand-fg' : 'text-slate-600 hover:bg-slate-100'}"
+							onclick={() => (topicOpts.count = n)}>{n}</button
+						>
+					{/each}
+				</div>
+				<label class="flex items-center gap-1 text-slate-600">
+					<span class="sr-only">Nivel</span>
+					<select bind:value={topicOpts.level} class="bg-surface min-h-10 rounded-full border border-slate-300 px-3 text-base sm:text-sm" aria-label="Nivel">
+						{#each Object.entries(TOPIC_LEVELS) as [v, label] (v)}
+							<option value={v as TopicLevel}>{label}</option>
+						{/each}
+					</select>
+				</label>
+			</div>
+		{/if}
 	{/if}
 
 	<div class="mt-3 flex items-center gap-3">
@@ -473,6 +557,7 @@
 			{:else if queue.length}Generar desde {queue.length === 1 ? 'la foto' : `${queue.length} fotos`}
 			{:else if !text.trim()}Escribe algo o añade una foto
 			{:else if mode === 'word'}Crear tarjeta
+			{:else if mode === 'topic'}Crear {topicOpts.count} tarjetas del tema
 			{:else}Extraer tarjetas{/if}
 		</Button>
 		{#if estimate != null}<span class="shrink-0 text-xs text-slate-400">≈ {fmtUsd(estimate)}</span>{/if}
@@ -516,7 +601,7 @@
 					{#if u}<img src={u} alt="" class="size-8 rounded object-cover" />{/if}
 					<span class="min-w-0 flex-1 truncate">Foto · {g.proposals.length} {g.proposals.length === 1 ? 'propuesta' : 'propuestas'}</span>
 				{:else}
-					<span class="min-w-0 flex-1 truncate">{g.kind === 'word' ? 'Palabra' : 'Texto'} · «{g.text}»</span>
+					<span class="min-w-0 flex-1 truncate">{g.kind === 'word' ? 'Palabra' : g.kind === 'topic' ? 'Tema' : 'Texto'} · «{g.text}»</span>
 				{/if}
 				{#if g.status !== 'running'}
 					<button
@@ -525,7 +610,15 @@
 						onclick={() => regenerate(g)}
 						aria-label="Generar de nuevo">↻<span class="hidden sm:inline">&nbsp;De nuevo</span></button
 					>
-					{#if g.kind !== 'word' && g.proposals.length}
+					{#if g.kind === 'topic' && g.proposals.length}
+						<button
+							class="flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-md px-2 text-base text-sky-700 hover:bg-sky-50 sm:text-sm"
+							disabled={!!running || !net.online}
+							onclick={() => moreOf(g)}
+							aria-label="Más de este tema">＋&nbsp;Más</button
+						>
+					{/if}
+					{#if (g.kind === 'text' || g.kind === 'image') && g.proposals.length}
 						<button
 							class="flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-md px-2 text-base text-sky-700 hover:bg-sky-50 sm:text-sm"
 							disabled={!!running || !net.online}
@@ -562,15 +655,28 @@
 {#if !groups.length && !running && !draftOffer}
 	<div class="mt-8 space-y-2 text-center text-sm text-slate-400">
 		<p><Furigana text="猫[ねこ]" /> o «perro» → una tarjeta con ejemplos.</p>
+		<p>«anime persona 5», «vocabulario de cocina» → tarjetas de ese tema.</p>
 		<p>Un párrafo, una letra o subtítulos → varias tarjetas.</p>
 		<p>Fotos de un cartel, manga o captura → tarjetas con la palabra marcada.</p>
 	</div>
 {/if}
 
+{#if total && deckId === null}
+	<label class="mt-5 block text-sm text-slate-600">
+		Nombre del mazo nuevo
+		<input
+			bind:value={newDeckName}
+			oninput={() => (deckTouched = true)}
+			class="bg-surface mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-base text-slate-900"
+			placeholder="Generadas por IA"
+		/>
+	</label>
+{/if}
+
 {#if total}
 	<ActionBar>
-		<Select bind:value={deckId} class="min-w-0 flex-1">
-			<option value={null}>+ Nuevo mazo «Generadas por IA»</option>
+		<Select bind:value={deckId} class="min-w-0 flex-1" onchange={() => (deckTouched = true)}>
+			<option value={null}>+ Nuevo: «{newDeckName.trim() || 'Generadas por IA'}»</option>
 			{#each decks as d (d.id)}
 				<option value={d.id}>{d.name}</option>
 			{/each}

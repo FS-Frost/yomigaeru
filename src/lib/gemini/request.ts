@@ -116,3 +116,35 @@ Cada campo debe ser breve y sin repetir texto. Responde solo con el JSON.${retry
 
 /** Límite por string para el detector de bucles en tarjetas. */
 export const CARD_LOOP = { maxString: LIMITS.context * 3 };
+
+export interface TopicRequest {
+	count: number;
+	level: 'beginner' | 'intermediate' | 'advanced';
+	/** Frentes que el estudiante ya tiene o ya se propusieron (sin furigana): no repetirlos. */
+	exclude?: string[];
+}
+
+const LEVEL_TEXT: Record<TopicRequest['level'], string> = {
+	beginner: 'principiante (aprox. JLPT N5–N4): palabras frecuentes y concretas, oraciones cortas y simples',
+	intermediate: 'intermedio (aprox. JLPT N3): vocabulario habitual del tema, oraciones naturales',
+	advanced: 'avanzado (aprox. JLPT N2–N1): vocabulario específico, expresiones y registro variado',
+};
+
+/** Tema descrito en español → vocabulario japonés útil para ese tema. */
+export function topicPrompt(topic: string, r: TopicRequest, attempt: number): string {
+	const exclude = r.exclude?.length ? `\nEl estudiante YA conoce estas palabras: no las incluyas (ni variantes triviales):\n${r.exclude.join('、')}` : '';
+	return `Un estudiante hispanohablante de japonés quiere tarjetas de vocabulario sobre este tema: «${topic.slice(0, 300)}».
+Nivel: ${LEVEL_TEXT[r.level]}.
+Crea exactamente ${r.count} tarjetas en "cards" con una mezcla útil:
+- sobre todo vocabulario que de verdad aparece al consumir o hablar de ese tema (en un anime o juego: el que se oye en sus diálogos);
+- si el tema es una obra concreta, algunos términos propios de ella (marca en "back" que es un término de la obra, p. ej. «(término de Persona 5)»);
+- nada de nombres de personajes sueltos ni palabras que no aporten.
+Para cada tarjeta:
+   - "front": la palabra o expresión en japonés con furigana en notación Anki (ej: 怪盗[かいとう]). Solo la palabra.
+   - "reading": lectura en kana (solo hiragana/katakana).
+   - "back": significado breve en español.
+   - "context": UNA oración japonesa de ejemplo, natural y ambientada en el tema, que contenga exactamente "front" (con furigana Anki sobre sus kanji).
+   - "examples": lista vacía [].
+"deckName": nombre corto en español para el mazo (ej. «Persona 5», «Cocina japonesa»).${exclude}
+No repitas palabras entre tarjetas. Cada campo debe ser breve y sin repetir texto. Responde solo con el JSON.${retry(attempt)}`;
+}

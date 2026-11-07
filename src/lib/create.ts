@@ -1,9 +1,28 @@
-// Lógica pura de «Crear» (entrada única): decidir 1 tarjeta o varias, y operar sobre los grupos
-// de propuestas (uno por texto o por foto). Probado en tests/create.test.ts.
+// Lógica pura de «Crear» (entrada única): decidir 1 tarjeta, varias o un tema, y operar sobre los
+// grupos de propuestas (uno por texto, tema o foto). Probado en tests/create.test.ts.
 import { hasJapanese, normalizeFront } from '$lib/jp';
 import type { Proposal } from '$lib/proposals';
 
-export type CreateMode = 'word' | 'text';
+/**
+ * - word: una palabra o expresión → 1 tarjeta (猫, «perro», «buenos días»).
+ * - text: extraer de un texto japonés → varias (猫が好きです。, un párrafo).
+ * - topic: vocabulario sobre un tema descrito en español → varias («anime persona 5»).
+ */
+export type CreateMode = 'word' | 'text' | 'topic';
+
+export type TopicLevel = 'beginner' | 'intermediate' | 'advanced';
+export const TOPIC_LEVELS: Record<TopicLevel, string> = { beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzado' };
+export const TOPIC_COUNTS = [5, 10, 20] as const;
+export interface TopicOptions {
+	count: number;
+	level: TopicLevel;
+}
+export const TOPIC_DEFAULTS: TopicOptions = { count: 10, level: 'intermediate' };
+/** Cuántas tarjetas propias se envían para que la IA no las repita. */
+export const TOPIC_EXCLUDE_MAX = 300;
+
+/** Palabras que delatan que se pide un tema y no traducir una expresión. */
+const TOPIC_HINTS = /\b(tema|temas|vocabulario|palabras|sobre|acerca|relacionad[oa]s?|anime|manga|juego|videojuego|serie|series|pel[ií]cula|novela|libro|canci[oó]n|banda|j-?pop|k-?pop)\b/i;
 
 /** Largo máximo (sin espacios) para tratar la entrada como una sola palabra/expresión. */
 export const WORD_MAX = 25;
@@ -11,15 +30,19 @@ export const WORD_MAX = 25;
 export const MAX_PHOTOS = 10;
 
 /**
- * ¿Una tarjeta o varias?
- * - Sin japonés (p. ej. «perro») → 1 tarjeta: se busca la palabra.
- * - Una línea corta (≤ 25) sin puntuación de oración → 1 tarjeta (猫, 食べる, 見当がつかない).
- * - Con 。！？!?. , varias líneas o más larga → varias (猫が好きです。, un párrafo).
+ * ¿Una tarjeta, varias o un tema?
+ * - Sin japonés: tema si hay 3+ palabras o una pista («tema», «vocabulario de», «sobre», «anime»…)
+ *   → «anime persona 5», «ir al médico»; si no, 1 tarjeta → «perro», «buenos días», «cocina japonesa».
+ * - Con japonés: una línea corta (≤ 25) sin puntuación de oración → 1 tarjeta (猫, 食べる);
+ *   con 。！？!?. , varias líneas o más larga → varias (猫が好きです。, un párrafo).
  */
 export function detectMode(input: string): CreateMode {
 	const t = input.trim();
 	if (!t) return 'word';
-	if (!hasJapanese(t)) return 'word';
+	if (!hasJapanese(t)) {
+		const words = t.split(/\s+/).filter(Boolean).length;
+		return words >= 3 || TOPIC_HINTS.test(t) ? 'topic' : 'word';
+	}
 	if (/\n/.test(t)) return 'text';
 	if (/[。！？!?．.]/.test(t)) return 'text';
 	return t.replace(/\s/g, '').length <= WORD_MAX ? 'word' : 'text';
@@ -29,9 +52,13 @@ export type GroupStatus = 'pending' | 'running' | 'done' | 'error';
 
 export interface CreateGroup {
 	id: string;
-	kind: 'word' | 'text' | 'image';
-	/** Texto de origen (palabra o texto largo). */
+	kind: 'word' | 'text' | 'topic' | 'image';
+	/** Texto de origen (palabra, texto largo o tema). */
 	text?: string;
+	/** Solo tema: cantidad y nivel pedidos. */
+	topic?: TopicOptions;
+	/** Solo tema: nombre de mazo sugerido por la IA («Persona 5»). */
+	deckName?: string;
 	/** Foto (ya recortada y comprimida) para imagen → tarjetas. */
 	image?: Blob;
 	status: GroupStatus;
@@ -74,4 +101,11 @@ export function addUnique(groups: Pick<CreateGroup, 'proposals'>[], target: Pick
 export function orderedProposals(ps: Proposal[], dupsLast: boolean): { p: Proposal; i: number }[] {
 	const list = ps.map((p, i) => ({ p, i }));
 	return dupsLast ? [...list.filter((x) => !x.p.dups.length), ...list.filter((x) => x.p.dups.length)] : list;
+}
+
+/** Nombre de mazo limpio a partir de la sugerencia de la IA o del propio tema. */
+export function topicDeckName(suggested: string | undefined, topic: string): string {
+	const clean = (x: string) => x.replace(/\s+/g, ' ').trim().slice(0, 40);
+	const name = clean(suggested ?? '') || clean(topic.replace(/^(vocabulario|palabras|tema)\s+(de|sobre)\s+/i, ''));
+	return name ? name.charAt(0).toUpperCase() + name.slice(1) : 'Generadas por IA';
 }

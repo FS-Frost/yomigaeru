@@ -1,6 +1,7 @@
 import { newSchedule } from '$lib/srs/fsrs';
 import { activeFacets } from '$lib/srs/facets';
 import { normalizeFront } from '$lib/jp';
+import { stripFurigana } from '$lib/furigana';
 import { DAY_MS } from '$lib/srs/constants';
 import { getSetting } from './settings';
 import { db, type Card, type Facet, type ReviewLog, type Schedule } from './schema';
@@ -141,4 +142,10 @@ export async function pauseCard(id: number, days: number, now = Date.now()): Pro
 /** Mueve una tarjeta a otro mazo. */
 export async function moveCard(id: number, deckId: number): Promise<void> {
 	await db.cards.update(id, { deckId });
+}
+
+/** Frentes (sin furigana, sin repetir) de las `limit` tarjetas más recientes: para que la IA no las repita. */
+export async function recentFronts(limit: number): Promise<string[]> {
+	const cards = await db.cards.orderBy('createdAt').reverse().limit(limit).toArray();
+	return [...new Set(cards.map((c) => stripFurigana(c.front).trim()).filter(Boolean))];
 }

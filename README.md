@@ -24,7 +24,8 @@ PWA estática tipo Anki para aprender japonés, con SRS (repetición espaciada) 
 
 ### Crear tarjetas
 
-- **Una sola pantalla «Crear»**: escribe una palabra (`猫`, «perro»), pega un texto o añade fotos (cámara, galería —varias a la vez— o pegar). Detecta sola si es **una tarjeta** (palabra o expresión corta) o **varias** (oración, párrafo, letra, subtítulos); un interruptor permite cambiarlo.
+- **Una sola pantalla «Crear»**: escribe una palabra (`猫`, «perro»), un **tema en español** («anime persona 5», «vocabulario de cocina») o pega un texto en japonés, o añade fotos (cámara, galería —varias a la vez— o pegar). Detecta sola si es **una tarjeta** (palabra o expresión), **varias** (oración, párrafo, letra, subtítulos) o un **tema**; un interruptor permite cambiarlo.
+- **Tarjetas por tema**: eliges cantidad (5, 10 o 20) y nivel (principiante, intermedio, avanzado). La IA mezcla vocabulario que de verdad aparece en ese tema con términos propios de la obra (marcados como tales), cada uno con una frase de ejemplo ambientada (activa «Completar frase»), y evita las palabras que ya tienes. «＋ Más» pide otras nuevas sin repetir, y se sugiere guardarlas en un mazo con el nombre del tema (p. ej. «Persona 5»), editable.
 - **Progreso en vivo**: etapas (enviando, pensando, escribiendo), tiempo, costo estimado y las tarjetas apareciendo una a una mientras la IA responde. Se puede **cancelar** conservando lo recibido.
 - **Fotos**: recortar y girar antes de enviar (menos costo, más precisión); cola de hasta 10 fotos, cada una con sus propuestas y la palabra marcada en la imagen. Las cajas se ajustan arrastrando (moverlas, sus esquinas o dibujar una nueva; flechas para afinar), también después desde Mazos. La foto se guarda una sola vez y la comparten sus tarjetas.
 - **Revisión cómoda en el móvil**: una fila por propuesta (se despliega para editar), Todas/Ninguna, ocultar duplicadas, «Ajustar» con instrucciones a la IA y «De nuevo».
@@ -39,6 +40,7 @@ PWA estática tipo Anki para aprender japonés, con SRS (repetición espaciada) 
 - **Backup** JSON completo (sin la API key). Al importar se guarda antes una copia de lo actual; se admiten backups de versiones anteriores.
 - **Copias automáticas diarias** en el navegador (7 días, ligeras: sin imágenes ni audio), restaurables y descargables desde Ajustes.
 - **Costos de Gemini**: tokens y costo estimado por llamada (con los precios oficiales), gasto del mes con proyección, por función, presupuesto mensual con bloqueo opcional y precios editables.
+- **Ajustes** en secciones plegables (se abre una a la vez) con un resumen en cada cabecera.
 - **Modelos**: selector con los recomendados (rápido, barato, máxima calidad, con su precio), «Ver todos» con los disponibles para tu key y uno personalizado. Al cambiarlo se comprueba que exista. Búsqueda web opcional para verificar lecturas raras.
 - **Calibración FSRS** con tu historial (fsrs-rs en WebAssembly) a partir de 400 repasos.
 
@@ -92,7 +94,7 @@ bun run dev        # servidor local (PORT=5000 por defecto)
 
 ### Probar la IA de verdad
 
-`bun run test:gemini` ejecuta las funciones reales de la app (palabra, texto largo, foto, juez, gramática y voz) contra la API de Gemini y reporta `finishReason`, tokens, costo y tiempo. Lee `GEMINI_API_KEY` de `.env` (nunca la imprime) y cuesta centavos; no corre en CI. Opciones: `--runs N`, `--only text,word,image,judge,grammar,tts`, `--model …`, `--tts-model …`, `--search`, `--list` (modelos de tu key).
+`bun run test:gemini` ejecuta las funciones reales de la app (palabra, texto largo, foto, juez, gramática y voz) contra la API de Gemini y reporta `finishReason`, tokens, costo y tiempo. Lee `GEMINI_API_KEY` de `.env` (nunca la imprime) y cuesta centavos; no corre en CI. Opciones: `--runs N`, `--only text,word,topic,image,judge,grammar,tts`, `--topic "…"`, `--count N`, `--model …`, `--tts-model …`, `--search`, `--list` (modelos de tu key).
 
 ## Estructura
 

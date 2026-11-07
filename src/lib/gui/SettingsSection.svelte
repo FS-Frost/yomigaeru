@@ -18,7 +18,8 @@
 	});
 </script>
 
-<details {id} bind:this={el} bind:open class="group bg-surface scroll-mt-4 rounded-2xl border border-slate-200 shadow-sm">
+<!-- `name` común = acordeón nativo: abrir una sección cierra las demás. -->
+<details {id} name="ajustes" bind:this={el} bind:open class="group bg-surface scroll-mt-4 rounded-2xl border border-slate-200 shadow-sm">
 	<summary class="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 select-none [&::-webkit-details-marker]:hidden">
 		<span class="min-w-0 flex-1">
 			<span class="block font-semibold">{title}</span>

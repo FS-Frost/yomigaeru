@@ -8,6 +8,7 @@ export const FEATURES = {
 	generateCard: 'Generar tarjeta',
 	imageToCards: 'Foto → tarjetas',
 	textToCards: 'Texto → tarjetas',
+	topicToCards: 'Tema → tarjetas',
 	grammar: 'Explicar gramática',
 	judge: 'Juez de producción',
 	tts: 'Audio natural',

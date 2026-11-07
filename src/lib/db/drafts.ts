@@ -6,6 +6,8 @@ export interface CreateDraft {
 	text: string;
 	mode: CreateMode | null;
 	deckId: number | null;
+	/** Nombre del mazo nuevo elegido o sugerido por un tema. */
+	newDeckName?: string;
 	groups: CreateGroup[];
 }
 

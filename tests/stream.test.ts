@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { GeminiError } from '$lib/gemini/errors';
-import { consumeJsonStream, detectLoop, extractCompleteItems, parseJsonLoose, type ChunkLike } from '$lib/gemini/stream';
+import { consumeJsonStream, detectLoop, extractCompleteItems, extractString, parseJsonLoose, type ChunkLike } from '$lib/gemini/stream';
 
 const FULL = JSON.stringify(
 	{
@@ -169,4 +169,10 @@ test('parseJsonLoose tolera ```json y lanza invalid con detalle', () => {
 	} catch (e) {
 		expect((e as GeminiError).code).toBe('invalid');
 	}
+});
+
+test('extractString lee un campo ya cerrado de un JSON a medio llegar', () => {
+	expect(extractString('{"deckName":"Persona \\"5\\"","cards":[{"front":"怪', 'deckName')).toBe('Persona "5"');
+	expect(extractString('{"deckName":"Pers', 'deckName')).toBeNull();
+	expect(extractString('{"cards":[]}', 'deckName')).toBeNull();
 });

@@ -6,7 +6,7 @@ import { z } from 'zod';
 // Los límites de largo (`maxLength`/`maxItems`) frenan los bucles de repetición del modelo.
 
 /** Límites de largo por campo (también los usa la sanidad de tarjetas). */
-export const LIMITS = { front: 60, reading: 80, back: 200, context: 400, example: 200, examples: 3, cards: 15 } as const;
+export const LIMITS = { front: 60, reading: 80, back: 200, context: 400, example: 200, examples: 3, cards: 15, topicCards: 20, deckName: 40 } as const;
 
 /** String que tolera `null`/ausente como vacío (el modelo a veces manda `null`). */
 const Str = z
@@ -79,6 +79,13 @@ const cardWithBoxSchema: Schema = object({
 const cardsList = (item: Schema): Schema => object({ cards: { type: Type.ARRAY, maxItems: String(LIMITS.cards), items: item } });
 export const cardsGeminiSchema: Schema = cardsList(cardGeminiSchema);
 export const cardsWithBoxGeminiSchema: Schema = cardsList(cardWithBoxSchema);
+
+/** Tema → tarjetas: nombre de mazo sugerido + hasta 20 tarjetas. */
+export const topicGeminiSchema: Schema = object({
+	deckName: str('Nombre corto en español para un mazo con estas tarjetas (ej. «Persona 5», «Cocina japonesa»)', LIMITS.deckName),
+	cards: { type: Type.ARRAY, maxItems: String(LIMITS.topicCards), items: cardGeminiSchema },
+});
+export const TopicCards = z.object({ deckName: Str, cards: z.array(z.unknown()) });
 
 const KANA = /^[\p{Script=Hiragana}\p{Script=Katakana}ー・\s〜～、。]*$/u;
 const JAPANESE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
@@ -173,6 +180,7 @@ export const judgeGeminiSchema: Schema = object({
 
 /** Pares genai/Zod (para el test de paridad). */
 export const SCHEMA_PAIRS = {
+	topic: { gemini: topicGeminiSchema, zod: TopicCards },
 	card: { gemini: cardGeminiSchema, zod: GeneratedCard },
 	grammar: { gemini: grammarGeminiSchema, zod: GrammarBreakdown },
 	judge: { gemini: judgeGeminiSchema, zod: Judgement },
